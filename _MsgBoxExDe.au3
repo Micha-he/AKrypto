@@ -1,6 +1,7 @@
 ; Include Version:1.01 (15 August 2006)
 ; Change Language to German (micha_he@autoit.de, 29.04.2010)
 ; Horizontal & Vertical Center-Coordinates for MsgBox (micha_he@autoit.de, 30.04.2010)
+; Parameter to turn messagebox-sound off (micha_he@autoit.de, 17.09.2019)
 ;
 #include-once
 ;
@@ -36,10 +37,10 @@ Global $giMBEX_TmrStart, $giMBEX_TmrEnd
 
 ;===============================================================================
 ;  +++ This is to emulate a Modal MsgBox($iFlag, $sTitle, $sText [, $iTimeout]) +++
-; _MsgBoxEx($iFlag, $sTitle, $sText [, $iTimeout [, $sReturnCallBack [, $iLeft [, $iTop [, $hParent]]]]])
+; _MsgBoxEx($iFlag, $sTitle, $sText [, $iTimeout [, $sReturnCallBack [, $iLeft [, $iTop [, $hParent [, $pbSound]]]]]])
 ;
 ;  +++ This is the call to use if you have your own EventLoop where you call _MBEX_TickTock() +++
-; _MsgBoxExCreate($iFlag, $sTitle, $sText [, $iTimeout [, $sReturnCallBack [, $iLeft [, $iTop [, $hParent]]]]])
+; _MsgBoxExCreate($iFlag, $sTitle, $sText [, $iTimeout [, $sReturnCallBack [, $iLeft [, $iTop [, $hParent [, $pbSound]]]]]])
 ; __________________________________________________________________________________________________________________
 ; $iFlag			The flag indicates the type of message box and the possible button combinations. See remarks. 
 ; $sTitle			The title of the message box. 
@@ -58,6 +59,7 @@ Global $giMBEX_TmrStart, $giMBEX_TmrEnd
 ; $iTop				[optional] 	Y Position of Dialog, default of -1 centers dialog vertically.
 ;								< -1 vertical Center-Coordinate for MsgBox
 ; $hParent			[optional] 	Handle to a Parent Window, defaults to 0.
+; $pbSound			[optional] 	Parameter to turn messagebox-sound off
 ; __________________________________________________________________________________________________________________
 ;
 ; Note, as this is Modeless, this version does not support multiple instances which can be invoked.
@@ -132,8 +134,8 @@ Global $giMBEX_TmrStart, $giMBEX_TmrEnd
 ; Local EventLoop to service this _MsgBoxEx UDF.
 ; Usually you would use your own EventLoop but this will do if none other.
 ;===============================================================================
-Func _MsgBoxEx($piFlag, $psTitle, $psText, $piTimeout = 0, $psReturnCallBack = "", $piLeft = -1, $piTop = -1, $phParent = 0)
-	_MsgBoxExCreate($piFlag, $psTitle, $psText, $piTimeout, $psReturnCallBack, $piLeft, $piTop, $phParent)
+Func _MsgBoxEx($piFlag, $psTitle, $psText, $piTimeout = 0, $psReturnCallBack = "", $piLeft = -1, $piTop = -1, $phParent = 0, $pbSound = True)
+	_MsgBoxExCreate($piFlag, $psTitle, $psText, $piTimeout, $psReturnCallBack, $piLeft, $piTop, $phParent, $pbSound)
 	; Local Event Loop for Timer CountDown Tick
 	While $giMBEX_RtnVal == 0
 		Sleep(250) 			; Allow events to happen...
@@ -148,7 +150,7 @@ EndFunc
 ;  +++ This is the call to use if you have your own EventLoop where you call _MBEX_TickTock() +++
 ; _MsgBoxExCreate($iFlag, $sTitle, $sText [, $iTimeout [, $sReturnCallBack [, $iLeft [, $iTop [, $hParent]]]]])
 ;===============================================================================
-Func _MsgBoxExCreate($piFlag, $psTitle, $psText, $piTimeout = 0, $psReturnCallBack = "", $piLeft = -1, $piTop = -1, $phParent = 0)
+Func _MsgBoxExCreate($piFlag, $psTitle, $psText, $piTimeout = 0, $psReturnCallBack = "", $piLeft = -1, $piTop = -1, $phParent = 0, $pbSound = True)
 	Local $liPrevCoordMode, $laText, $li, $liMaxStrLen = 0, $liTextWidth, $lsValue, $liStyle, $liStyleEx, $lbTabs
 	Local $liIconOffset, $liIconIndex, $liXpos, $lbBold, $liButtonWidth, $liBoldVOffset = 0, $liHeight, $lbButton1Centered
 	Local $liNumOfButtons, $lsButton1Text, $lsButton2Text, $lsButton3Text, $liDefButtonNum, $liLeftGrow, $liRightGrow
@@ -342,7 +344,7 @@ Func _MsgBoxExCreate($piFlag, $psTitle, $psText, $piTimeout = 0, $psReturnCallBa
 	$liStyle = BitOr($WS_CAPTION, $WS_POPUP)
 	If BitAND($piFlag, 4096) == 4096 Then $liStyle = BitOr($WS_CAPTION, $WS_POPUP, $WS_MINIMIZEBOX, $WS_SYSMENU) ; System Modal has Icon..
 	If BitAND($piFlag, 524288) == 524288 Then $liStyle = BitOr($liStyle, $SS_RIGHT)
-	If $piLeft < -1 AND $piTop < -1 Then ; Koordinaten sind Mittelpunkte und müssen abhängig der GUI-Größe berechnet werden
+	If $piLeft < -1 AND $piTop < -1 Then ; Koordinaten sind Mittelpunkte und mÃ¼ssen abhÃ¤ngig der GUI-GrÃ¶ÃŸe berechnet werden
 		$piLeft = Abs($piLeft) - ($liTextWidth + $liIconOffset + 10) / 2
 		$piTop = Abs($piTop) - (55 + ($laText[0] * $lciLineHeight) + $liBoldVOffset) / 2
 	EndIf
@@ -469,7 +471,7 @@ Func _MsgBoxExCreate($piFlag, $psTitle, $psText, $piTimeout = 0, $psReturnCallBa
 
 	GUICtrlSetState($ghMBEX_Button, $GUI_FOCUS)
 	
-	_PlaySystemSound("Default",True)
+	If $pbSound = True Then _PlaySystemSound("Default",True)
 	
 	return $ghMBEX
 EndFunc ;==>_MsgBoxEx
