@@ -1,5 +1,5 @@
 #pragma compile(ProductName, "AKrypto")
-#pragma compile(ProductVersion, 0.52)
+#pragma compile(ProductVersion, 0.53)
 #pragma compile(LegalCopyright, © Michael Schröder)
 #pragma compile(Icon, .\AKrypto.ico)
 
@@ -7,7 +7,7 @@
 	****************************************************************************
 	Titel:			AKrypto.au3
 	Autor:			micha_he@autoit.de
-	Datum:			16.09.2019
+	Datum:			17.09.2019
 	
 	Ideen &
 	Hilfen:			spudw2k@autoitscript.com (Tree-/ListView)
@@ -26,6 +26,15 @@
 	AutoIt-Version:	3.3.14.5
 	
 	History
+	V0.53
+		Programm warnt nun, wenn es beendet werden soll, aber noch Dateien
+		in externen Anwendungen geöffnet sind.
+		Kurzinfo beim 1.Start und im Kontextmenü hinzugefügt
+		Funktion _MsgBoxEx() in der UDF um einen Parameter für das
+		Deaktivieren des System-Sounds erweitert
+		INI-Datei wird beim Beenden nur dann gespeichert, wenn vorher auch
+		ein gültiges Passwort eingegeben wurde
+		Position des TreeView minimal angepasst
 	V0.52
 		Anpassungen an AutoIt V3.3.14.5
 		Verarbeitung der Dateinamen-Erweiterung in der Funktion
@@ -190,7 +199,7 @@ Global $idTreeView, $idListView, $idLVContextMenu, $idLVNewFolder
 Global $idLVNewFile, $idLVSelectAll, $idLVSelectNone, $idLVItemDelete
 Global $hTVImageList, $aWinPos, $aTrayPos, $iTreeWidth, $sKey
 Global $iNewTreeWidth, $idLVDecryptAll, $idSplashLabel, $idSplashLabelAddInfo
-Global $aStartedFiles[1][3]
+Global $idLVGetShortInfo, $aStartedFiles[1][3]
 Global $aDesktopData, $bInitSort = True, $idTreeViewRootItem
 Global $Version = FileGetVersion(@ScriptFullPath, "ProductVersion")
 If _VersionCompare(@AutoItVersion, "3.3.8.0") = -1 Then Global $WM_DROPFILES = 0x233
@@ -199,7 +208,7 @@ If _VersionCompare(@AutoItVersion, "3.3.8.0") = -1 Then Global $WM_DROPFILES = 0
 $hMainGui = GUICreate("AKrypto V" & $Version, 780, 348, -1, -1, $WS_SIZEBOX, BitOR($WS_EX_CLIENTEDGE, $WS_EX_ACCEPTFILES))
 $idMainGroup = GUICtrlCreateGroup("", 8, 2, 764, 318, $WS_CLIPSIBLINGS)
 GUICtrlSetResizing($idMainGroup, $GUI_DOCKLEFT + $GUI_DOCKRIGHT + $GUI_DOCKTOP + $GUI_DOCKBOTTOM)
-$idTreeView = GUICtrlCreateTreeView(16, 18, 250, 290, BitOR($TVS_HASBUTTONS, $TVS_HASLINES, $TVS_LINESATROOT, $TVS_SHOWSELALWAYS, $WS_GROUP, $WS_TABSTOP, $WS_BORDER))
+$idTreeView = GUICtrlCreateTreeView(16, 17, 250, 292, BitOR($TVS_HASBUTTONS, $TVS_HASLINES, $TVS_LINESATROOT, $TVS_SHOWSELALWAYS, $WS_GROUP, $WS_TABSTOP, $WS_BORDER))
 GUICtrlSetResizing($idTreeView, $GUI_DOCKAUTO)
 $idListView = GUICtrlCreateListView("Name|Type|Size|Modified|Sort", 266, 17, 500, 292, BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
 GUICtrlSetState($idListView, $GUI_DROPACCEPTED)
@@ -208,6 +217,8 @@ _GUICtrlListView_HideColumn ($idListView, 4)
 _GUICtrlListView_RegisterSortCallBack($idListView, 2, True)
 $aWinPos = WinGetPos($hMainGui)
 $idLVContextMenu = GUICtrlCreateContextMenu($idListView)
+$idLVGetShortInfo = GUICtrlCreateMenuItem("Kurzinformation", $idLVContextMenu)
+GUICtrlCreateMenuItem("", $idLVContextMenu)
 $idLVNewFolder = GUICtrlCreateMenuItem("Neuer Ordner", $idLVContextMenu)
 $idLVNewFile = GUICtrlCreateMenuItem("Neue Datei", $idLVContextMenu)
 $idLVDecryptAll = GUICtrlCreateMenuItem("Entpacken nach...", $idLVContextMenu)
@@ -366,6 +377,9 @@ While True
 			
 		Case $GUI_EVENT_DROPPED
 			__AddNewObjects()
+			
+		Case $idLVGetShortInfo
+			__ShowShortInfo()
 			
 		Case $idLVItemRename
 			__RenameObjects()
@@ -693,26 +707,34 @@ Func __TreeView_GetFullPath($hWnd, $hItem) ;Determine full path of selected item
 	Return $sItemText
 EndFunc   ;==>__TreeView_GetFullPath
 
-Func __ExitApp()
-	Local $hSearch, $aTreePos, $sTempFileName
+Func __ExitApp($__bSaveIni = True)
+	Local $__hSearch, $__aTreePos, $__sTempFileName
+	If $aStartedFiles[0][0] > 0 Then
+		If _MsgBoxEx(52, "Achtung", "Es sind noch " & $aStartedFiles[0][0] & " Dateien extern geöffnet !" & @CRLF & @CRLF & _
+			"Der VaultTemp-Ordner mit den entschlüsselten Dateien kann deshalb möglicherweise" & @CRLF & _
+			"nicht vollständig gelöscht werden. Vorsicht, Sicherheitsrisiko !" & @CRLF & @CRLF & _
+			"Trotzdem Fortfahren ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = $IDNO Then Return SetError(1,0,0)
+	EndIf
 	_GUICtrlListView_UnRegisterSortCallBack($idListView)
 	If FileExists($sVaultTemp) Then
-		$hSearch = FileFindFirstFile($sVaultTemp & "\*.*")
+		$__hSearch = FileFindFirstFile($sVaultTemp & "\*.*")
 		While 1
-			$sTempFileName = FileFindNextFile($hSearch)
+			$__sTempFileName = FileFindNextFile($__hSearch)
 			If @error Then ExitLoop
-			__Secure_FileDelete($sVaultTemp & "\" & $sTempFileName)
+			__Secure_FileDelete($sVaultTemp & "\" & $__sTempFileName)
 		Wend
 		DirRemove($sVaultTemp, 1)
 	EndIf
-	$aTreePos = ControlGetPos($hMainGui, "", $idTreeView)
-	; Fensterposition speichern, wenn nicht minimiert (= -32000)
-	If $aWinPos[0] <> -32000 Then IniWrite($sIniFile, "MainGUI", "WinXPos", $aWinPos[0])
-	If $aWinPos[1] <> -32000 Then IniWrite($sIniFile, "MainGUI", "WinYPos", $aWinPos[1])
-	If $aWinPos[1] <> -32000 Then IniWrite($sIniFile, "MainGUI", "WinWidth", $aWinPos[2])
-	If $aWinPos[1] <> -32000 Then IniWrite($sIniFile, "MainGUI", "WinHeight", $aWinPos[3])
-	If $aTreePos[2] >= 20 Then IniWrite($sIniFile, "MainGUI", "TreeWidth", $aTreePos[2])
-	If $sDecryptTarget <> "" Then IniWrite($sIniFile, "Options", "DecryptTarget", $sDecryptTarget)
+	If $__bSaveIni = True Then
+		$__aTreePos = ControlGetPos($hMainGui, "", $idTreeView)
+		; Fensterposition speichern, wenn nicht minimiert (= -32000)
+		If $aWinPos[0] <> -32000 Then IniWrite($sIniFile, "MainGUI", "WinXPos", $aWinPos[0])
+		If $aWinPos[1] <> -32000 Then IniWrite($sIniFile, "MainGUI", "WinYPos", $aWinPos[1])
+		If $aWinPos[1] <> -32000 Then IniWrite($sIniFile, "MainGUI", "WinWidth", $aWinPos[2])
+		If $aWinPos[1] <> -32000 Then IniWrite($sIniFile, "MainGUI", "WinHeight", $aWinPos[3])
+		If $__aTreePos[2] >= 20 Then IniWrite($sIniFile, "MainGUI", "TreeWidth", $__aTreePos[2])
+		If $sDecryptTarget <> "" Then IniWrite($sIniFile, "Options", "DecryptTarget", $sDecryptTarget)
+	EndIf
 	Exit
 EndFunc   ;==>__ExitApp
 
@@ -1030,6 +1052,7 @@ Func __CheckPW()
 	Local $bCheck = False
 	Local $aInVault = DirGetSize($sVaultDir, 1)
 	Local $search, $object, $sSecondPW
+	If Not IsArray($aInVault) Or ($aInVault[1] + $aInVault[2]) < 1 Then __ShowShortInfo()
 	Do
 		$sKey = ""
 		; Passwort als Parameter übergeben ?
@@ -1044,8 +1067,7 @@ Func __CheckPW()
 				$sKey = InputBox("Passwort ?", "Bitte geben Sie das Passwort ein:", "", "*", -1, -1, $aWinPos[0] + ($aWinPos[2] - 250) / 2, $aWinPos[1] + ($aWinPos[3] - 190) / 2)
 			Until $sKey <> "" Or _MsgBoxEx(53, "Fehler", "Ohne ein Passwort kann nicht verschlüsselt werden !", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 2
 		EndIf
-		If $sKey = "" Then __ExitApp()
-		
+		If $sKey = "" Then __ExitApp(False)
 		If IsArray($aInVault) And ($aInVault[1] + $aInVault[2]) > 0 Then
 			$search = FileFindFirstFile($sVaultDir & "\*.*")
 			$object = FileFindNextFile($search)
@@ -1057,11 +1079,9 @@ Func __CheckPW()
 			If StringLeft(Blowfish($sKey, BinaryToString(_Base64Decode(StringReplace(StringReplace($object, "_", "/"), "-", "+"))), 1), StringLen($sIdent)) = $sIdent Then $bCheck = True
 		Else
 			$sSecondPW = InputBox("Prüfung ?", "Bitte geben Sie das Passwort zur Überprüfung ein zweites mal ein:", "", "*", -1, -1, $aWinPos[0] + ($aWinPos[2] - 250) / 2, $aWinPos[1] + ($aWinPos[3] - 190) / 2)
-			
 		EndIf
-		
 	Until $bCheck = True Or $sSecondPW = $sKey Or _MsgBoxEx(53, "Passwortfehler", "Eingegebene Passwörter sind nicht korrekt ! Wiederholen ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 2
-	If $bCheck = False And $sSecondPW <> $sKey Then __ExitApp()
+	If $bCheck = False And $sSecondPW <> $sKey Then __ExitApp(False)
 EndFunc   ;==>__CheckPW
 
 Func __Encrypt_Name($sName)
@@ -1673,4 +1693,15 @@ Func __ShellGetFileInfo($pPIDL, $iFlags, $iAttributes, ByRef $tSHFILEINFO)
 	Local $aRet = DllCall('shell32.dll', 'dword_ptr', 'SHGetFileInfoW', 'ptr', $pPIDL, 'dword', $iAttributes, 'struct*', $tSHFILEINFO, 'uint', DllStructGetSize($tSHFILEINFO), 'uint', $iFlags)
 	If @error Then Return SetError(@error, @extended, 0)
 	Return $aRet[0]
+EndFunc
+
+Func __ShowShortInfo()
+	_MsgBoxEx(48, "Info", "Kurzanleitung zu AKrypto" & @CRLF & @CRLF & _
+		"Da kein Passwort verschlüsslet abgelegt wird, erfolgt die Passwortabfrage" & @CRLF & _
+		"beim Start 2mal, solange keine Dateien oder Ordner verschlüsselt hinzugefügt" & @CRLF & _
+		"wurden. Dies kann per Kontextmenü oder per Drag'nDrop geschehen." & @CRLF & @CRLF & _
+		"Entschlüsselte Dateien werden für die Ansicht/Bearbeitung entschlüsselt im Ordner" & @CRLF & _
+		"'VaultTemp' abgelegt und spätestens bei Programmende sicher wieder gelöscht." & @CRLF & _
+		"Sollte ein 'Sicheres Löschen' des VaultTemp nicht möglich sein, wird beim" & @CRLF & _
+		"Programmende darauf hingewiesen.", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1, 0, False)
 EndFunc
