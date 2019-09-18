@@ -1,5 +1,5 @@
 #pragma compile(ProductName, "AKrypto")
-#pragma compile(ProductVersion, 0.53)
+#pragma compile(ProductVersion, 0.54)
 #pragma compile(LegalCopyright, © Michael Schröder)
 #pragma compile(Icon, .\AKrypto.ico)
 
@@ -7,7 +7,7 @@
 	****************************************************************************
 	Titel:			AKrypto.au3
 	Autor:			micha_he@autoit.de
-	Datum:			17.09.2019
+	Datum:			18.09.2019
 	
 	Ideen &
 	Hilfen:			spudw2k@autoitscript.com (Tree-/ListView)
@@ -26,6 +26,17 @@
 	AutoIt-Version:	3.3.14.5
 	
 	History
+	V0.54
+		Handling bei Verschieben der Trennlinie TreeView/Listview
+		verbessert. Cursor sollte nun immer angepasst werden.
+		Funktion __GUICtrlListView_GetSortedColumn() wieder entfernt
+		Funktion __GUICtrlListView_SortItems() angepasst, damit eine initiale
+			Sortierung per Rückgabe von GUICtrlGetState() des ListView-
+			Controls (gibt -1 vorm dem 1. Anklicken mit der Maus aus)
+			trotzdem funktioniert
+		Funktion __GUICtrlListView_SortItems() angepasst, damit das Sortieren
+			eines leeren ListViews nicht zum Wechsel der Sortierrichtung
+			führt
 	V0.53
 		Programm warnt nun, wenn es beendet werden soll, aber noch Dateien
 		in externen Anwendungen geöffnet sind.
@@ -210,7 +221,7 @@ $idMainGroup = GUICtrlCreateGroup("", 8, 2, 764, 318, $WS_CLIPSIBLINGS)
 GUICtrlSetResizing($idMainGroup, $GUI_DOCKLEFT + $GUI_DOCKRIGHT + $GUI_DOCKTOP + $GUI_DOCKBOTTOM)
 $idTreeView = GUICtrlCreateTreeView(16, 17, 250, 292, BitOR($TVS_HASBUTTONS, $TVS_HASLINES, $TVS_LINESATROOT, $TVS_SHOWSELALWAYS, $WS_GROUP, $WS_TABSTOP, $WS_BORDER))
 GUICtrlSetResizing($idTreeView, $GUI_DOCKAUTO)
-$idListView = GUICtrlCreateListView("Name|Type|Size|Modified|Sort", 266, 17, 500, 292, BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
+$idListView = GUICtrlCreateListView("Name|Typ|Größe|letzte Änderung|Sort", 266, 17, 500, 292, BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
 GUICtrlSetState($idListView, $GUI_DROPACCEPTED)
 GUICtrlSetResizing($idListView, $GUI_DOCKAUTO)
 _GUICtrlListView_HideColumn ($idListView, 4)
@@ -329,43 +340,44 @@ __GUICtrlTreeView_Sort($idTreeView)
 _SendMessage(GUICtrlGetHandle($idTreeView), $TVM_EXPAND, $TVE_EXPAND, $idTreeViewRootItem, 0, "wparam", "handle") ; TreeView nur Root erweitern (öffnen)
 
 While True
-	$aMousePos = GUIGetCursorInfo($hMainGui)
-	; Cursur für Verschiebung der Trennlinie umschalten
-	If ($aMousePos[0] >= ($aTreePos[0] + $aTreePos[2] - 4) And $aMousePos[0] <= ($aListPos[0] + 4)) Then
-		If MouseGetCursor() = 2 Then
-			GUISetCursor(13, 1)
-			$bCursorSwitched = True
+	If WinActive($hMainGui) Then
+		$aMousePos = GUIGetCursorInfo($hMainGui)
+		; Cursur für Verschiebung der Trennlinie umschalten
+		If ($aMousePos[0] >= ($aTreePos[0] + $aTreePos[2] - 4) And $aMousePos[0] <= ($aListPos[0] + 4)) Then
+			If $bCursorSwitched = False Then
+				GUISetCursor(13, 1, $hMainGui)
+				$bCursorSwitched = True
+			EndIf
+		Else
+			If $bCursorSwitched = True Then
+				GUISetCursor(2, 1, $hMainGui)
+				$bCursorSwitched = False
+			EndIf
 		EndIf
-	Else
-		If $bCursorSwitched = True Then
-			GUISetCursor(2)
-			$bCursorSwitched = False
+		; Verschieben der Trennlinie zwischen TreeView und ListView
+		If $aMousePos[2] = True Then ; linke Maustaste gedrückt ?
+			If $bSnap = False And $bCursorSwitched = True Then
+				$bSnap = True
+			EndIf
+			If $bSnap = True Then
+				$iNewTreeWidth = $aMousePos[0] - $aTreePos[0]
+				If $iNewTreeWidth < 20 Then $iNewTreeWidth = 20
+				If $iNewTreeWidth > ($aTreePos[2] + $aListPos[2]) - 20 Then $iNewTreeWidth = ($aTreePos[2] + $aListPos[2]) - 20
+				ControlMove($hMainGui, "", $idTreeView, $aTreePos[0], $aTreePos[1], $iNewTreeWidth)
+				ControlMove($hMainGui, "", $idListView, $aTreePos[0] + $iNewTreeWidth, $aListPos[1], ($aTreePos[2] + $aListPos[2]) - $iNewTreeWidth)
+				$aTreePos = ControlGetPos($hMainGui, "", $idTreeView)
+				$aListPos = ControlGetPos($hMainGui, "", $idListView)
+				__ColumnResize($idListView)
+			EndIf
+		Else
+			If $bSnap = True Then
+				$bSnap = False
+				GUICtrlSetPos($idTreeView, $aTreePos[0], $aTreePos[1])
+				GUICtrlSetPos($idListView, $aListPos[0], $aListPos[1])
+				__ColumnResize($idListView)
+			EndIf
 		EndIf
 	EndIf
-	; Verschieben der Trennlinie zwischen TreeView und ListView
-	If $aMousePos[2] = True Then ; linke Maustaste gedrückt ?
-		If $bSnap = False And $bCursorSwitched = True Then
-			$bSnap = True
-		EndIf
-		If $bSnap = True Then
-			$iNewTreeWidth = $aMousePos[0] - $aTreePos[0]
-			If $iNewTreeWidth < 20 Then $iNewTreeWidth = 20
-			If $iNewTreeWidth > ($aTreePos[2] + $aListPos[2]) - 20 Then $iNewTreeWidth = ($aTreePos[2] + $aListPos[2]) - 20
-			ControlMove($hMainGui, "", $idTreeView, $aTreePos[0], $aTreePos[1], $iNewTreeWidth)
-			ControlMove($hMainGui, "", $idListView, $aTreePos[0] + $iNewTreeWidth, $aListPos[1], ($aTreePos[2] + $aListPos[2]) - $iNewTreeWidth)
-			$aTreePos = ControlGetPos($hMainGui, "", $idTreeView)
-			$aListPos = ControlGetPos($hMainGui, "", $idListView)
-			__ColumnResize($idListView)
-		EndIf
-	Else
-		If $bSnap = True Then
-			$bSnap = False
-			GUICtrlSetPos($idTreeView, $aTreePos[0], $aTreePos[1])
-			GUICtrlSetPos($idListView, $aListPos[0], $aListPos[1])
-			__ColumnResize($idListView)
-		EndIf
-	EndIf
-	
 	; Prüfe auf beendete Anwendungen
 	__CheckStartedFiles()
 	
@@ -403,7 +415,8 @@ While True
 			__DecryptAll()
 			
 		Case $idListView
-			__GUICtrlListView_SortItems($idListView, __GUICtrlListView_GetSortedColumn($idListView))
+			__GUICtrlListView_SortItems($idListView, GUICtrlGetState($idListView))
+			;__GUICtrlListView_SortItems($idListView, __GUICtrlListView_GetSortedColumn($idListView))
 			
 	EndSwitch
 WEnd
@@ -687,7 +700,7 @@ Func __ShowFolder(ByRef $__id_TV, ByRef $__id_LV) ;Show folder in Source Folder
 		__GUICtrlListView_SortItems($idListView, 0)
 		$bInitSort = False
 	Else
-		__GUICtrlListView_SortItems($idListView, __GUICtrlListView_GetSortedColumn($idListView), True); Listview erneut (identisch) sortieren
+		__GUICtrlListView_SortItems($idListView, GUICtrlGetState($idListView), True); Listview erneut (identisch) sortieren
 	EndIf
 	_GUICtrlListView_HideColumn ($idListView, 4)
 	_GUICtrlListView_EndUpdate($__id_LV)
@@ -1556,6 +1569,7 @@ EndFunc   ;==>__GetDecryptedLinkTarget
 Func __GUICtrlListView_SortItems($hWnd, $iCol, $__bReSort = False)
 	Local $iRet, $iIndex, $pFunction, $hHeader, $iFormat
 	Local $bColChanged = False
+	If $iCol = -1 Then $iCol = 0
 	If Not IsHWnd($hWnd) Then $hWnd = GUICtrlGetHandle($hWnd)
 	Local $__iItemCount = _GUICtrlListView_GetItemCount ($hWnd)
 	For $x = 1 To $__g_aListViewSortInfo[0][0]
@@ -1569,10 +1583,17 @@ Func __GUICtrlListView_SortItems($hWnd, $iCol, $__bReSort = False)
 		$iCol = 4
 	EndIf
 	$pFunction = DllCallbackGetPtr($__g_aListViewSortInfo[$iIndex][2]) ; get pointer to call back
-	$__g_aListViewSortInfo[$iIndex][3] = $iCol ; $nColumn = column clicked
+	If $__g_aListViewSortInfo[$iIndex][3] <> $iCol Then ; set clicked column if  changed and set direction to ascending
+		$__g_aListViewSortInfo[$iIndex][3] = $iCol
+		$__g_aListViewSortInfo[$iIndex][5] = 1
+	EndIf
 	$__g_aListViewSortInfo[$iIndex][7] = 0 ; $bSet
 	$__g_aListViewSortInfo[$iIndex][4] = $__g_aListViewSortInfo[$iIndex][6] ; nCurCol = $nCol
-	If ($__bReSort = True And $__iItemCount > 1) Or ($__bReSort = False And $__iItemCount <= 1) Then $__g_aListViewSortInfo[$iIndex][5] *= -1
+	If $__bReSort = True And $__iItemCount > 1 Then ; change direction if resort is requested and >=1 items available
+		$__g_aListViewSortInfo[$iIndex][5] *= -1
+	Else
+		If $__bReSort = False And $__iItemCount <= 1 Then $__g_aListViewSortInfo[$iIndex][5] = 1 ; set direction to ascending if a normal sort is requested and there are less or equal than 1 item available
+	EndIf
 	$iRet = _SendMessage($hWnd, $LVM_SORTITEMSEX, $hWnd, $pFunction, 0, "hwnd", "ptr")
 	If $bColChanged = True Then
 		$iCol = 0
@@ -1625,17 +1646,6 @@ Func __GUICtrlTreeView_Sort($hWnd)
 	EndIf
 
 EndFunc   ;==>__GUICtrlTreeView_Sort
-
-
-Func __GUICtrlListView_GetSortedColumn($__hListView)
-	If Not IsHWnd($__hListView) Then $__hListView = GUICtrlGetHandle($__hListView)
-	Local $__hLVHeader = _GUICtrlListView_GetHeader($__hListView)
-	Local $__iIndex
-    For $__iIndex = 0 To _GUICtrlHeader_GetItemCount($__hLVHeader) - 1
-        If BitAND(_GUICtrlHeader_GetItemFlags($__hLVHeader, $__iIndex), 12) Then Return $__iIndex
-    Next
-    Return -1
-EndFunc   ;==>__GUICtrlListView_GetSortedColumn
 
 
 Func __GetIcon_ShellHandler($__sIconNamePathAndExt, ByRef $__hImageList)
