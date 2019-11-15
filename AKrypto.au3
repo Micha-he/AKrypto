@@ -1,5 +1,5 @@
 #pragma compile(ProductName, "AKrypto")
-#pragma compile(ProductVersion, 0.54)
+#pragma compile(ProductVersion, 0.55)
 #pragma compile(LegalCopyright, © Michael Schröder)
 #pragma compile(Icon, .\AKrypto.ico)
 
@@ -7,7 +7,7 @@
 	****************************************************************************
 	Titel:			AKrypto.au3
 	Autor:			micha_he@autoit.de
-	Datum:			18.09.2019
+	Datum:			15.11.2019
 	
 	Ideen &
 	Hilfen:			spudw2k@autoitscript.com (Tree-/ListView)
@@ -26,6 +26,11 @@
 	AutoIt-Version:	3.3.14.5
 	
 	History
+	V0.55
+		Verschieben der Trennlinie zwische TreeView und ListView, nur wenn
+		die vertikale Position der Maus im Bereich der Trennline ist
+		Optionale Wartezeit beim Programmende eingefügt, in der geschlossene
+		Sub-Anwendungen ordnungsgemäß enden können.
 	V0.54
 		Handling bei Verschieben der Trennlinie TreeView/Listview
 		verbessert. Cursor sollte nun immer angepasst werden.
@@ -159,10 +164,10 @@
 	
 	TODO,1:			%-Fortschrittsanzeige beim Ver- / Entschlüsseln
 	TODO,2:			automatisches Entpacken alle Dateien & UV zum Start
-	eines Programms
+					eines Programms
 	TODO,2:			Windows-Dateisystembeschränkung auf 248 Zeichen beim
-	Ordner-Komplett-Pfad und 259 Zeichen Komplettpfad inkl.
-	Dateiname umgehen.
+					Ordner-Komplett-Pfad und 259 Zeichen Komplettpfad inkl.
+					Dateiname umgehen.
 	
 	****************************************************************************
 #ce
@@ -213,15 +218,15 @@ Global $iNewTreeWidth, $idLVDecryptAll, $idSplashLabel, $idSplashLabelAddInfo
 Global $idLVGetShortInfo, $aStartedFiles[1][3]
 Global $aDesktopData, $bInitSort = True, $idTreeViewRootItem
 Global $Version = FileGetVersion(@ScriptFullPath, "ProductVersion")
-If _VersionCompare(@AutoItVersion, "3.3.8.0") = -1 Then Global $WM_DROPFILES = 0x233
+If _VersionCompare(@AutoItVersion, "3.3.8.0") = -1 Then Global Const $WM_DROPFILES = 0x233
 
 ; Haupt-Oberfläche generieren
 $hMainGui = GUICreate("AKrypto V" & $Version, 780, 348, -1, -1, $WS_SIZEBOX, BitOR($WS_EX_CLIENTEDGE, $WS_EX_ACCEPTFILES))
 $idMainGroup = GUICtrlCreateGroup("", 8, 2, 764, 318, $WS_CLIPSIBLINGS)
 GUICtrlSetResizing($idMainGroup, $GUI_DOCKLEFT + $GUI_DOCKRIGHT + $GUI_DOCKTOP + $GUI_DOCKBOTTOM)
-$idTreeView = GUICtrlCreateTreeView(16, 17, 250, 292, BitOR($TVS_HASBUTTONS, $TVS_HASLINES, $TVS_LINESATROOT, $TVS_SHOWSELALWAYS, $WS_GROUP, $WS_TABSTOP, $WS_BORDER))
+$idTreeView = GUICtrlCreateTreeView(15, 10, 250, 308, BitOR($TVS_HASBUTTONS, $TVS_HASLINES, $TVS_LINESATROOT, $TVS_SHOWSELALWAYS, $WS_GROUP, $WS_TABSTOP, $WS_BORDER))
 GUICtrlSetResizing($idTreeView, $GUI_DOCKAUTO)
-$idListView = GUICtrlCreateListView("Name|Typ|Größe|letzte Änderung|Sort", 266, 17, 500, 292, BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
+$idListView = GUICtrlCreateListView("Name|Typ|Größe|letzte Änderung|Sort", 265, 10, 502, 308, BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
 GUICtrlSetState($idListView, $GUI_DROPACCEPTED)
 GUICtrlSetResizing($idListView, $GUI_DOCKAUTO)
 _GUICtrlListView_HideColumn ($idListView, 4)
@@ -343,7 +348,7 @@ While True
 	If WinActive($hMainGui) Then
 		$aMousePos = GUIGetCursorInfo($hMainGui)
 		; Cursur für Verschiebung der Trennlinie umschalten
-		If ($aMousePos[0] >= ($aTreePos[0] + $aTreePos[2] - 4) And $aMousePos[0] <= ($aListPos[0] + 4)) Then
+		If $aMousePos[0] >= ($aTreePos[0] + $aTreePos[2] - 4) And $aMousePos[0] <= ($aListPos[0] + 4) And $aMousePos[1] >= $aTreePos[1] And $aMousePos[1] <= ($aTreePos[1] + $aTreePos[3]) Then
 			If $bCursorSwitched = False Then
 				GUISetCursor(13, 1, $hMainGui)
 				$bCursorSwitched = True
@@ -416,7 +421,6 @@ While True
 			
 		Case $idListView
 			__GUICtrlListView_SortItems($idListView, GUICtrlGetState($idListView))
-			;__GUICtrlListView_SortItems($idListView, __GUICtrlListView_GetSortedColumn($idListView))
 			
 	EndSwitch
 WEnd
@@ -722,12 +726,21 @@ EndFunc   ;==>__TreeView_GetFullPath
 
 Func __ExitApp($__bSaveIni = True)
 	Local $__hSearch, $__aTreePos, $__sTempFileName
+	Local $__iTStart
+	__SplashGUI_SetState(@SW_SHOW, "AKrypto wird beendet...")
+	$__iTStart = TimerInit()
+	While $aStartedFiles[0][0] > 0 And TimerDiff($__iTStart) < 3000
+		Sleep(100)
+		__CheckStartedFiles()
+	Wend
 	If $aStartedFiles[0][0] > 0 Then
+		__SplashGUI_SetState(@SW_HIDE)
 		If _MsgBoxEx(52, "Achtung", "Es sind noch " & $aStartedFiles[0][0] & " Dateien extern geöffnet !" & @CRLF & @CRLF & _
 			"Der VaultTemp-Ordner mit den entschlüsselten Dateien kann deshalb möglicherweise" & @CRLF & _
 			"nicht vollständig gelöscht werden. Vorsicht, Sicherheitsrisiko !" & @CRLF & @CRLF & _
 			"Trotzdem Fortfahren ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = $IDNO Then Return SetError(1,0,0)
 	EndIf
+	__SplashGUI_SetState(@SW_SHOW)
 	_GUICtrlListView_UnRegisterSortCallBack($idListView)
 	If FileExists($sVaultTemp) Then
 		$__hSearch = FileFindFirstFile($sVaultTemp & "\*.*")
@@ -748,6 +761,7 @@ Func __ExitApp($__bSaveIni = True)
 		If $__aTreePos[2] >= 20 Then IniWrite($sIniFile, "MainGUI", "TreeWidth", $__aTreePos[2])
 		If $sDecryptTarget <> "" Then IniWrite($sIniFile, "Options", "DecryptTarget", $sDecryptTarget)
 	EndIf
+	__SplashGUI_SetState(@SW_HIDE)
 	Exit
 EndFunc   ;==>__ExitApp
 
@@ -1328,11 +1342,9 @@ Func __WM_NOTIFY($hWnd, $iMsg, $iwParam, $ilParam) ;Notify func
 					Local $hItem = _GUICtrlTreeView_HitTestItem($__h_TV, $iX, $iY)
 					If $hItem <> 0 Then _GUICtrlTreeView_SelectItem($__h_TV, $hItem, $TVGN_CARET)
 				Case $TVN_SELCHANGEDW
-					;__TreeView_FillFolder($idTreeView)
 					__ShowFolder($idTreeView, $idListView)
 					Return True
 			EndSwitch
-
 		Case Else
 			Switch $iCode
 				Case $NM_CLICK ; The user has clicked the left mouse button within the control
