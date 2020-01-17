@@ -1,5 +1,5 @@
 #pragma compile(ProductName, "AKrypto")
-#pragma compile(ProductVersion, 0.55)
+#pragma compile(ProductVersion, 0.551)
 #pragma compile(LegalCopyright, © Michael Schröder)
 #pragma compile(Icon, .\AKrypto.ico)
 
@@ -26,6 +26,8 @@
 	AutoIt-Version:	3.3.14.5
 	
 	History
+	V0.551
+		Wartezeit beim Programmende nochmals modifiziert
 	V0.55
 		Verschieben der Trennlinie zwische TreeView und ListView, nur wenn
 		die vertikale Position der Maus im Bereich der Trennline ist
@@ -733,6 +735,7 @@ Func __ExitApp($__bSaveIni = True)
 		Sleep(100)
 		__CheckStartedFiles()
 	Wend
+	__CheckStartedFiles()
 	If $aStartedFiles[0][0] > 0 Then
 		__SplashGUI_SetState(@SW_HIDE)
 		If _MsgBoxEx(52, "Achtung", "Es sind noch " & $aStartedFiles[0][0] & " Dateien extern geöffnet !" & @CRLF & @CRLF & _
