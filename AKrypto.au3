@@ -1,5 +1,5 @@
 #pragma compile(ProductName, "AKrypto")
-#pragma compile(ProductVersion, 0.551)
+#pragma compile(ProductVersion, 0.552)
 #pragma compile(LegalCopyright, © Michael Schröder)
 #pragma compile(Icon, .\AKrypto.ico)
 
@@ -7,7 +7,7 @@
 	****************************************************************************
 	Titel:			AKrypto.au3
 	Autor:			micha_he@autoit.de
-	Datum:			15.11.2019
+	Datum:			27.10.2020
 	
 	Ideen &
 	Hilfen:			spudw2k@autoitscript.com (Tree-/ListView)
@@ -26,8 +26,11 @@
 	AutoIt-Version:	3.3.14.5
 	
 	History
+	V0.552
+		HotKeySet für DEL beim Umbenennen & Anlegen von Dateien und Ordnern
+		temporär deaktiviert
 	V0.551
-		Wartezeit beim Programmende nochmals modifiziert
+		Wartezeit am Programmende nochmals modifiziert
 	V0.55
 		Verschieben der Trennlinie zwische TreeView und ListView, nur wenn
 		die vertikale Position der Maus im Bereich der Trennline ist
@@ -246,8 +249,6 @@ $idLVItemRename = GUICtrlCreateMenuItem("Umbenennen", $idLVContextMenu)
 $idLVItemDelete = GUICtrlCreateMenuItem("Löschen", $idLVContextMenu)
 GUISetState(@SW_HIDE, $hMainGui)
 
-HotKeySet("{DEL}", "__DeleteObjects")
-
 ; SplashText-Oberfläche generieren
 $hSplashGUI = GUICreate("", 350, 55, $aWinPos[0] + (($aWinPos[2] - 350) / 2), $aWinPos[1] + (($aWinPos[3] - 25) / 2), $WS_POPUP, Default, $hMainGui)
 GUISetBkColor(0xFFFC70, $hSplashGUI)
@@ -345,6 +346,8 @@ _GUICtrlTreeView_SelectItem($idTreeView, _GUICtrlTreeView_GetItemHandle($idTreeV
 __TreeView_FillFolder($idTreeView)
 __GUICtrlTreeView_Sort($idTreeView)
 _SendMessage(GUICtrlGetHandle($idTreeView), $TVM_EXPAND, $TVE_EXPAND, $idTreeViewRootItem, 0, "wparam", "handle") ; TreeView nur Root erweitern (öffnen)
+
+HotKeySet("{DEL}", "__DeleteObjects")
 
 While True
 	If WinActive($hMainGui) Then
@@ -798,7 +801,9 @@ Func __RenameObjects()
 			If StringInStr(FileGetAttrib(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]))), "D") Then
 				; Umbenennen von Ordnern
 				Do
+					HotKeySet("{DEL}")
 					$sNewName = InputBox("Neuer Name", "Bitte geben sie einen neuen Namen für den Ordner '" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) & "' ein :", $sNewName, "", $iInputWidth, $iInputHeight, ($aWinPos[0] + ($aWinPos[2] / 2)) - ($iInputWidth / 2), ($aWinPos[1] + ($aWinPos[3] / 2)) - ($iInputHeight / 2))
+					HotKeySet("{DEL}", "__DeleteObjects")
 					If @error = 1 Then ExitLoop 2
 					If $sNewName <> "" And $sNewName <> _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) Then
 						If FileExists(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & $sNewName)) Then
@@ -827,7 +832,9 @@ Func __RenameObjects()
 			Else
 				; Umbenennen von Dateien
 				Do
+					HotKeySet("{DEL}")
 					$sNewName = InputBox("Neuer Name", "Bitte geben sie einen neuen Namen für die Datei '" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) & "' ein :", $sNewName, "", $iInputWidth, $iInputHeight, ($aWinPos[0] + ($aWinPos[2] / 2)) - ($iInputWidth / 2), ($aWinPos[1] + ($aWinPos[3] / 2)) - ($iInputHeight / 2))
+					HotKeySet("{DEL}", "__DeleteObjects")
 					If @error = 1 Then ExitLoop 2
 					If $sNewName <> "" And $sNewName <> _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) Then
 						If FileExists(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & $sNewName)) Then
@@ -893,7 +900,9 @@ EndFunc   ;==>__DeleteObjects
 
 Func __AddNewFolder() ; Add new Folder to Treeview/Listview with Contextmenue
 	Local $FolderName, $FolderNameC
+	HotKeySet("{DEL}",)
 	$FolderName = InputBox("Ordnername ?", " ", "Neuer Ordner")
+	HotKeySet("{DEL}", "__DeleteObjects")
 	If $FolderName <> "" Then
 		__SplashGUI_SetState(@SW_SHOW, "Ordner wird verschlüsselt...")
 		$FolderNameC = __Encrypt_Name($FolderName)
@@ -920,7 +929,9 @@ EndFunc   ;==>__AddNewFolder
 
 Func __AddNewFile() ; Add new File to Listview with Contextmenue
 	Local $FileName
+	HotKeySet("{DEL}",)
 	$FileName = InputBox("Dateiname ?", " ", "Neu.txt")
+	HotKeySet("{DEL}", "__DeleteObjects")
 	If $FileName <> "" Then
 		If FileExists(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & $FileName)) Then
 			__SplashGUI_SetState(@SW_HIDE)
