@@ -1,13 +1,14 @@
 #pragma compile(ProductName, "AKrypto")
-#pragma compile(ProductVersion, 0.552)
+#pragma compile(ProductVersion, 0.56.0.3)
 #pragma compile(LegalCopyright, © Michael Schröder)
 #pragma compile(Icon, .\AKrypto.ico)
+#pragma compile(Out, AKrypto.exe)
 
 #cs Copyright, Infos, History
 	****************************************************************************
 	Titel:			AKrypto.au3
 	Autor:			micha_he@autoit.de
-	Datum:			27.10.2020
+	Datum:			23.11.2020
 	
 	Ideen &
 	Hilfen:			spudw2k@autoitscript.com (Tree-/ListView)
@@ -26,11 +27,22 @@
 	AutoIt-Version:	3.3.14.5
 	
 	History
+	V0.56.0.3
+		Diverse ungenutze Variablen entfernt
+		Sprachanpassung im Unterverzeichnis '\Language' integriert. INI-
+			Dateien sollten im UTF-16-Format sein.
+		Neu-Laden der Benutzeroberfläche beim Sprachwechsel
+	V0.56.0.2
+		Initialisierung der Oberfläche in Funktionen aufgeteilt
+	V0.56.0.1
+		Versions-Nummerierung geändert: major.minor.build (build0=beta)
+		Funktion _StartFile2() um eine Ausnahme für RJTextEd erweitert, damit
+			dieser immer im Multi-Modus startet.
 	V0.552
 		HotKeySet für DEL beim Umbenennen & Anlegen von Dateien und Ordnern
-		temporär deaktiviert
+		temporär deaktiviert.
 	V0.551
-		Wartezeit am Programmende nochmals modifiziert
+		Wartezeit am Programmende nochmals modifiziert.
 	V0.55
 		Verschieben der Trennlinie zwische TreeView und ListView, nur wenn
 		die vertikale Position der Maus im Bereich der Trennline ist
@@ -214,138 +226,67 @@ Global $sDecryptTarget, $idLVItemRename
 Global $aMousePos, $aTreePos, $aListPos, $bSnap = False, $bCursorSwitched = False
 Global $sIniFile, $iWinXPos, $iWinYPos, $iWinWidth, $iWinHeight
 Global $iFreeX, $iFreeY
-Global $hSplashGUI
+Global $hSplashGUI, $idGUIGetMsg
 Global $sVaultTemp, $sVaultDir, $aInVault, $hMainGui, $idMainGroup
 Global $idTreeView, $idListView, $idLVContextMenu, $idLVNewFolder
 Global $idLVNewFile, $idLVSelectAll, $idLVSelectNone, $idLVItemDelete
 Global $hTVImageList, $aWinPos, $aTrayPos, $iTreeWidth, $sKey
 Global $iNewTreeWidth, $idLVDecryptAll, $idSplashLabel, $idSplashLabelAddInfo
 Global $idLVGetShortInfo, $aStartedFiles[1][3]
-Global $aDesktopData, $bInitSort = True, $idTreeViewRootItem
+Global $aDesktopData, $bInitSort, $idTreeViewRootItem
+Global $hLanguageMenue, $aLanguage[0][0], $sSelectedLanguageIni
+Global $sLangIniFileName, $aLangIniData, $iFindLngIni
+Global $sListViewHeader, $sPrgShortInfo, $sNewFolder, $sNewFile
+Global $sDecompressTo, $sMarkAll, $sMarkNone, $sRename, $sDelete
+Global $sActionPerformed, $sPrgEnded, $sAttention, $sExtFilesAreOpened
+Global $sError, $sRequest, $sPathLength, $sOverWrite, $sPasswordError
+Global $sUseTarget, $sWriteBack, $sInfo
+Global $sWriteBack, $sContinue, $sInfo, $sInfoText, $sFolderDescription
+Global $sFileSuffix, $sFolderNotCopied, $sFileNotCopied, $sInputNewName
+Global $sInputNewFolder, $sInputNewFile, $sInputPassword, $sInputCheck
+Global $sInputPleasePassword, $sInputPleasePasswordSecond
+Global $sWrongPasswordAgain, $sWithoutPwNotCrypted, $sInputDefaultFolder
+Global  $sInputDefaultFile, $sInputNewFoldername, $sInputNewFilename
+Global $sFolderOverwrite, $sFolderNotOverwrite, $sFolderNotRenamed
+Global $sFileOverwrite, $sFileNotOverwrite, $sFileNotRenamed
+Global $sObjectsDelete, $sObjectsAreDeleted, $sFolderNotDeleted
+Global $sFileNotDeleted, $sFolderEncrypted, $sFolderExists
+Global $sFolderNotCreated, $sFileExists, $sFileEncrypted, $sFileDecrypted
+Global $sFileUpdated, $sActionExecuted, $sFileNotCreated, $sObjectsEncrypted
+Global $sFolderPrefix, $sErrFolderCreatePrefix, $sCryptPathToLong
+Global $sCopyFileErrorGeneral, $sFileExistsOverwrite, $sDestinationNotAvailable
+Global $sFileNotDecrypted, $sSelectFolder, $sObjectsDecrypted
+Global $sDecryptFolderExistsUsed, $sDecryptFolderExistsContinue
+Global $sDecryptFileExistsContinue, $sDecryptSuccessful, $sDecryptWithError
+Global $sDecryptFileExistsOverwrite, $sFileEncryptNew, $sMenueLanguage
+
 Global $Version = FileGetVersion(@ScriptFullPath, "ProductVersion")
 If _VersionCompare(@AutoItVersion, "3.3.8.0") = -1 Then Global Const $WM_DROPFILES = 0x233
 
-; Haupt-Oberfläche generieren
-$hMainGui = GUICreate("AKrypto V" & $Version, 780, 348, -1, -1, $WS_SIZEBOX, BitOR($WS_EX_CLIENTEDGE, $WS_EX_ACCEPTFILES))
-$idMainGroup = GUICtrlCreateGroup("", 8, 2, 764, 318, $WS_CLIPSIBLINGS)
-GUICtrlSetResizing($idMainGroup, $GUI_DOCKLEFT + $GUI_DOCKRIGHT + $GUI_DOCKTOP + $GUI_DOCKBOTTOM)
-$idTreeView = GUICtrlCreateTreeView(15, 10, 250, 308, BitOR($TVS_HASBUTTONS, $TVS_HASLINES, $TVS_LINESATROOT, $TVS_SHOWSELALWAYS, $WS_GROUP, $WS_TABSTOP, $WS_BORDER))
-GUICtrlSetResizing($idTreeView, $GUI_DOCKAUTO)
-$idListView = GUICtrlCreateListView("Name|Typ|Größe|letzte Änderung|Sort", 265, 10, 502, 308, BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
-GUICtrlSetState($idListView, $GUI_DROPACCEPTED)
-GUICtrlSetResizing($idListView, $GUI_DOCKAUTO)
-_GUICtrlListView_HideColumn ($idListView, 4)
-_GUICtrlListView_RegisterSortCallBack($idListView, 2, True)
-$aWinPos = WinGetPos($hMainGui)
-$idLVContextMenu = GUICtrlCreateContextMenu($idListView)
-$idLVGetShortInfo = GUICtrlCreateMenuItem("Kurzinformation", $idLVContextMenu)
-GUICtrlCreateMenuItem("", $idLVContextMenu)
-$idLVNewFolder = GUICtrlCreateMenuItem("Neuer Ordner", $idLVContextMenu)
-$idLVNewFile = GUICtrlCreateMenuItem("Neue Datei", $idLVContextMenu)
-$idLVDecryptAll = GUICtrlCreateMenuItem("Entpacken nach...", $idLVContextMenu)
-$idLVSelectAll = GUICtrlCreateMenuItem("Alle markieren", $idLVContextMenu)
-$idLVSelectNone = GUICtrlCreateMenuItem("Keine markieren", $idLVContextMenu)
-$idLVItemRename = GUICtrlCreateMenuItem("Umbenennen", $idLVContextMenu)
-$idLVItemDelete = GUICtrlCreateMenuItem("Löschen", $idLVContextMenu)
-GUISetState(@SW_HIDE, $hMainGui)
-
-; SplashText-Oberfläche generieren
-$hSplashGUI = GUICreate("", 350, 55, $aWinPos[0] + (($aWinPos[2] - 350) / 2), $aWinPos[1] + (($aWinPos[3] - 25) / 2), $WS_POPUP, Default, $hMainGui)
-GUISetBkColor(0xFFFC70, $hSplashGUI)
-$idSplashLabel = GUICtrlCreateLabel("Aktion wird durchgeführt...", 5, 5, 340, 25, 1)
-GUICtrlSetColor(-1, 0x000000)
-GUICtrlSetBkColor(-1, 0xFFFC70)
-GUICtrlSetFont(-1, 14, 400, -1, "Comic Sans MS")
-$idSplashLabelAddInfo = GUICtrlCreateLabel("", 5, 30, 340, 20, 1)
-GUICtrlSetColor(-1, 0x000000)
-GUICtrlSetBkColor(-1, 0xFFFC70)
-GUICtrlSetFont(-1, 8.5, 400, -1, "Comic Sans MS")
-
-; ImageList für TreeView erzeugen
-$hTVImageList = _GUIImageList_Create(16, 16, 5, 2) ;Treeview Icon Image List
-_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 3) ;Folder
-_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 4) ;Folder Open
-_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 181) ;Cdr
-_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 8) ;Fixed
-_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 7) ;Removable
-_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 9) ;Network
-_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 11) ;CDRom
-_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 109) ;No Symbol for Burner
-_GUICtrlTreeView_SetNormalImageList($idTreeView, $hTVImageList)
-
-GUIRegisterMsg($WM_DROPFILES, '__WM_DROPFILES_FUNC')
-GUIRegisterMsg($WM_NOTIFY, "__WM_NOTIFY")
-GUIRegisterMsg($WM_MOVE, '__WM_Move')
-GUIRegisterMsg($WM_SIZE, '__WM_Move')
-
-; Positionen verschiedener Elemente ermitteln
-$aWinPos = WinGetPos($hMainGui) ; Main-GUI
-$aTrayPos = WinGetPos("[CLASS:Shell_TrayWnd]", "") ; Taskleiste
-$aDesktopData = __GetTotalScreenResolution() ; kompl. Virtueller Windows-Screen
-
-; Voreinstellungen versuchen aus INI zu laden und Fenster ggf. neu positionieren
-$iWinXPos = IniRead($sIniFile, "MainGUI", "WinXPos", "")
-$iWinYPos = IniRead($sIniFile, "MainGUI", "WinYPos", "")
-$iWinWidth = IniRead($sIniFile, "MainGUI", "WinWidth", "")
-$iWinHeight = IniRead($sIniFile, "MainGUI", "WinHeight", "")
-$iTreeWidth = IniRead($sIniFile, "MainGUI", "TreeWidth", "")
-$sVaultDir = IniRead($sIniFile, "Options", "VaultDir", @ScriptDir & "\Vault")
-If StringRight($sVaultDir, 1) = "\" Then $sVaultDir = StringLeft($sVaultDir, StringLen($sVaultDir) - 1)
-$sVaultTemp = IniRead($sIniFile, "Options", "VaultTemp", @ScriptDir & "\VaultTemp")
-If StringLeft($sVaultTemp, 1) = "@" Then $sVaultTemp = Execute($sVaultTemp)
-If StringRight($sVaultTemp, 1) = "\" Then $sVaultTemp = StringTrimRight($sVaultTemp, 1)
-$sDecryptTarget = IniRead($sIniFile, "Options", "DecryptTarget", "")
-If $iWinXPos <> "" And $iWinYPos <> "" Then
-	If $iWinXPos < 0 Then $iWinXPos = 0
-	If $iWinYPos < 0 Then $iWinYPos = 0
-	If $iWinWidth < 200 Then $iWinWidth = 200
-	If $iWinHeight < 100 Then $iWinHeight = 100
-	If $iWinWidth > $aDesktopData[0] Then $iWinWidth = $aDesktopData[0]
-	If $iWinHeight > $aDesktopData[1] Then $iWinHeight = $aDesktopData[1]
-	$iFreeX = $aDesktopData[0] - $iWinWidth
-	$iFreeY = $aDesktopData[1] - $iWinHeight
-	If $aTrayPos[1] = 0 And $aTrayPos[2] > 0 Then
-		$iFreeX = $aDesktopData[0] - $aTrayPos[2] - $iWinWidth
-	EndIf
-	If $aTrayPos[0] = 0 And $aTrayPos[3] > 0 Then
-		$iFreeY = $aDesktopData[1] - $aTrayPos[3] - $iWinHeight
-	EndIf
-	If $iWinXPos > ($iFreeX) Then $iWinXPos = $iFreeX
-	If $iWinYPos > ($iFreeY) Then $iWinYPos = $iFreeY
-	WinMove($hMainGui, "", $iWinXPos, $iWinYPos, $iWinWidth, $iWinHeight)
-	GUISetState(@SW_SHOW, $hMainGui)
-	$aWinPos = WinGetPos($hMainGui)
-	If $iTreeWidth <> "" Then
-		If $iTreeWidth < 20 Then $iTreeWidth = 20
-		If $iTreeWidth > ($aListPos[0] + $aListPos[2] - 20) Then $iTreeWidth = ($aListPos[0] + $aListPos[2] - 20)
-		GUICtrlSetPos($idTreeView, $aTreePos[0], $aTreePos[1], $iTreeWidth)
-		GUICtrlSetPos($idListView, $aTreePos[0] + $iTreeWidth, $aListPos[1], $aListPos[2] + $aTreePos[2] - $iTreeWidth)
-	EndIf
-Else
-	GUISetState(@SW_SHOW, $hMainGui)
+__LanguageIni_Read_List($aLanguage)
+If @Error Then
+	_MsgBoxEx(49, "Fehler", "Keine gültige Sprachdateien im Unterordner '\Language\' gefunden !" & @CRLF & "(No valid language-file in subfolder '\Language\' found !)")
+	Exit 1
 EndIf
 
-; ListView Spaltenbreiten anpassen
-__ColumnResize($idListView)
+; Zuletzt verwendete Sprache ermitteln oder Default (De -> En -> erste gefundene) festlegen
+$sSelectedLanguageIni = IniRead($sIniFile, "Options", "SelectedLanguage", "")
+If $sSelectedLanguageIni = "" or _ArraySearch($aLanguage, $sSelectedLanguageIni, 0, 0, 0, 0, 1, 1) < 0 Then
+	If _ArraySearch($aLanguage, "de.ini", 0, 0, 0, 0, 1, 1) >= 0 Then
+		$sSelectedLanguageIni = "de.ini"
+	Else
+		If _ArraySearch($aLanguage, "en.ini", 0, 0, 0, 0, 1, 1) >= 0 Then
+			$sSelectedLanguageIni = "en.ini"
+		Else
+			$sSelectedLanguageIni = $aLanguage[0][1]
+		EndIf
+	EndIf
+EndIf
 
-; Neue Positionsinformationen für das TreeView- & ListView-Element
-; ermitteln, da sich diese nach dem Verschieben oder ändern der Größe
-; verändert haben können
-$aTreePos = ControlGetPos($hMainGui, "", $idTreeView)
-$aListPos = ControlGetPos($hMainGui, "", $idListView)
+; Maße kompletter virtueller Windows-Screen ermitteln
+$aDesktopData = __GetTotalScreenResolution()
 
-; Frage nach Passwort und prüfe dies wenn möglich
-__CheckPW()
-
-; Lege Unterverzeichnis 'Vault' an, das TreeView mit dem ggf. bereits
-; gefüllten Vault-Ordner füllen, sortieren, anschließend den Wurzel-
-; Ordner auswählen und die erste Ebene erweitern(aufklappen)
-If Not FileExists($sVaultDir) Then DirCreate($sVaultDir)
-$idTreeViewRootItem = _GUICtrlTreeView_AddChild($idTreeView, "", $sVaultDir, 0, 1)
-_GUICtrlTreeView_SelectItem($idTreeView, _GUICtrlTreeView_GetItemHandle($idTreeView, 0))
-__TreeView_FillFolder($idTreeView)
-__GUICtrlTreeView_Sort($idTreeView)
-_SendMessage(GUICtrlGetHandle($idTreeView), $TVM_EXPAND, $TVE_EXPAND, $idTreeViewRootItem, 0, "wparam", "handle") ; TreeView nur Root erweitern (öffnen)
+__InitGUIs()
 
 HotKeySet("{DEL}", "__DeleteObjects")
 
@@ -392,7 +333,8 @@ While True
 	__CheckStartedFiles()
 	
 	; Hauptauswahl
-	Switch GUIGetMsg()
+	$idGUIGetMsg = GUIGetMsg()
+	Switch $idGUIGetMsg
 		
 		Case $GUI_EVENT_CLOSE
 			__ExitApp()
@@ -426,6 +368,10 @@ While True
 			
 		Case $idListView
 			__GUICtrlListView_SortItems($idListView, GUICtrlGetState($idListView))
+		
+		Case $aLanguage[0][2] To $aLanguage[UBound($aLanguage) -1][2]
+			$iFindLngIni = _ArraySearch($aLanguage, $idGUIGetMsg, 0, 0, 0, 0, 1, 2)
+			If Not @error and $sSelectedLanguageIni <> $aLanguage[$iFindLngIni][1] Then __GUI_LanguageMenu_Change($aLanguage[$iFindLngIni][1])
 			
 	EndSwitch
 WEnd
@@ -571,6 +517,7 @@ Func __FileGetIcon($sTargetItem)
 	Return $aReturnIconInfo
 EndFunc   ;==>__FileGetIcon
 
+
 Func __TreeView_FillFolder(ByRef $hWnd) ;Fill Folder in TreeView
 	Local $IsExpanded, $hSelectedItem, $sPathEncrypted
 	$hSelectedItem = _GUICtrlTreeView_GetSelection($hWnd)
@@ -591,6 +538,7 @@ Func __TreeView_FillFolder(ByRef $hWnd) ;Fill Folder in TreeView
 	__GUICtrlTreeView_Sort($idTreeView)
 EndFunc   ;==>__TreeView_FillFolder
 
+
 Func __SearchFolder($sPath, $hParentItem, $iLevel = 0) ;Recursive Folder Search for Source Treeview/Listview
 	Local $hNewSubItem
 	Local $aSubFolders = _FileListToArray($sPath, "*", $FLTA_FOLDERS)
@@ -602,6 +550,7 @@ Func __SearchFolder($sPath, $hParentItem, $iLevel = 0) ;Recursive Folder Search 
 	Next
 
 EndFunc   ;==>__SearchFolder
+
 
 Func __FriendlyDate($date) ;Convert Date for Readability
 	If Not IsArray($date) Then Return ""
@@ -615,6 +564,7 @@ Func __FriendlyDate($date) ;Convert Date for Readability
 	Return $datetime
 EndFunc   ;==>__FriendlyDate
 
+
 Func __ListView_GetSelectedItems($hWnd, $__id_LV, $__id_TV) ;Get list of Selected Items in Source ListView
 	Local $items
 	$items = _GUICtrlListView_GetSelectedIndices($__id_LV, True)
@@ -623,6 +573,7 @@ Func __ListView_GetSelectedItems($hWnd, $__id_LV, $__id_TV) ;Get list of Selecte
 	Next
 	Return $items
 EndFunc   ;==>__ListView_GetSelectedItems
+
 
 Func __ReduceMemory($i_PID = -1) ;Reduces Memory Usage -- Special thanks to w0uter and jftuga
 	If $i_PID <> -1 Then
@@ -635,10 +586,11 @@ Func __ReduceMemory($i_PID = -1) ;Reduces Memory Usage -- Special thanks to w0ut
 	Return $ai_Return[0]
 EndFunc   ;==>__ReduceMemory
 
+
 Func __ShowFolder(ByRef $__id_TV, ByRef $__id_LV) ;Show folder in Source Folder
 	Local $arrCurrentFolder[1][_GUICtrlListView_GetColumnCount($idListView)]
 	Local $item, $path, $filefolder, $size, $idx, $strExtension, $found
-	Local $aFileFolderItems, $iFileFolderType, $_iLV_State
+	Local $aFileFolderItems, $iFileFolderType
 	Local $aIconInfo, $aFoundData, $sDecryptedName
 	$item = _GUICtrlTreeView_GetSelection($__id_TV)
 	If $item = 0x000000 Then Return 0
@@ -652,10 +604,10 @@ Func __ShowFolder(ByRef $__id_TV, ByRef $__id_LV) ;Show folder in Source Folder
 			ReDim $arrCurrentFolder[$aFileFolderItems[0] +1][_GUICtrlListView_GetColumnCount($idListView)]
 			For $i = 1 To $aFileFolderItems[0]
 				If $iFileFolderType = 1 Then
-					$filefolder = "Ordner"
+					$filefolder = $sFolderDescription
 					$size = " "
 				Else
-					$filefolder = StringUpper(StringRight($aFileFolderItems[$i], StringLen($aFileFolderItems[$i]) - StringInStr($aFileFolderItems[$i], ".", 0, -1))) & "-Datei"
+					$filefolder = StringUpper(StringRight($aFileFolderItems[$i], StringLen($aFileFolderItems[$i]) - StringInStr($aFileFolderItems[$i], ".", 0, -1))) & $sFileSuffix
 					$size = FileGetSize($path & "\" & $aFileFolderItems[$i])
 				EndIf
 				$arrCurrentFolder[$i][0] = $aFileFolderItems[$i]
@@ -716,6 +668,7 @@ Func __ShowFolder(ByRef $__id_TV, ByRef $__id_LV) ;Show folder in Source Folder
 	__ReduceMemory()
 EndFunc   ;==>__ShowFolder
 
+
 Func __TreeView_GetFullPath($hWnd, $hItem) ;Determine full path of selected item in TreeView
 	Local $sItemText, $hParentItem
 	$sItemText = _GUICtrlTreeView_GetText($hWnd, $hItem)
@@ -729,10 +682,11 @@ Func __TreeView_GetFullPath($hWnd, $hItem) ;Determine full path of selected item
 	Return $sItemText
 EndFunc   ;==>__TreeView_GetFullPath
 
+
 Func __ExitApp($__bSaveIni = True)
 	Local $__hSearch, $__aTreePos, $__sTempFileName
 	Local $__iTStart
-	__SplashGUI_SetState(@SW_SHOW, "AKrypto wird beendet...")
+	__SplashGUI_SetState(@SW_SHOW, $sPrgEnded)
 	$__iTStart = TimerInit()
 	While $aStartedFiles[0][0] > 0 And TimerDiff($__iTStart) < 3000
 		Sleep(100)
@@ -741,10 +695,7 @@ Func __ExitApp($__bSaveIni = True)
 	__CheckStartedFiles()
 	If $aStartedFiles[0][0] > 0 Then
 		__SplashGUI_SetState(@SW_HIDE)
-		If _MsgBoxEx(52, "Achtung", "Es sind noch " & $aStartedFiles[0][0] & " Dateien extern geöffnet !" & @CRLF & @CRLF & _
-			"Der VaultTemp-Ordner mit den entschlüsselten Dateien kann deshalb möglicherweise" & @CRLF & _
-			"nicht vollständig gelöscht werden. Vorsicht, Sicherheitsrisiko !" & @CRLF & @CRLF & _
-			"Trotzdem Fortfahren ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = $IDNO Then Return SetError(1,0,0)
+		If _MsgBoxEx(52, $sAttention, Execute($sExtFilesAreOpened), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = $IDNO Then Return SetError(1,0,0)
 	EndIf
 	__SplashGUI_SetState(@SW_SHOW)
 	_GUICtrlListView_UnRegisterSortCallBack($idListView)
@@ -766,22 +717,23 @@ Func __ExitApp($__bSaveIni = True)
 		If $aWinPos[1] <> -32000 Then IniWrite($sIniFile, "MainGUI", "WinHeight", $aWinPos[3])
 		If $__aTreePos[2] >= 20 Then IniWrite($sIniFile, "MainGUI", "TreeWidth", $__aTreePos[2])
 		If $sDecryptTarget <> "" Then IniWrite($sIniFile, "Options", "DecryptTarget", $sDecryptTarget)
+		If $sSelectedLanguageIni <> "" Then IniWrite($sIniFile, "Options", "SelectedLanguage", $sSelectedLanguageIni)
 	EndIf
 	__SplashGUI_SetState(@SW_HIDE)
 	Exit
 EndFunc   ;==>__ExitApp
 
+
 Func __AddNewObjects() ; Add new Objects to Treeview/Listview with Drag 'n Drop
-	Local $SrcName
 	__SplashGUI_SetState(@SW_SHOW, "Objekte werden verschlüsselt...")
 	For $i = 0 To UBound($aDropFiles) - 1
 		If StringInStr(FileGetAttrib($aDropFiles[$i]), "D") Then
 			If __DirCopy_Crypt_Recursiv($aDropFiles[$i], __TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & StringMid($aDropFiles[$i], StringInStr($aDropFiles[$i], "\", 0, -1) + 1)) = 0 And $i < UBound($aDropFiles) - 1 Then
-				If _MsgBoxEx(52, "Fehler", "Der Ordner '" & $aDropFiles[$i] & "' konnte nicht fehlerfrei kopiert werden. Fortfahren ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
+				If _MsgBoxEx(52, $sError, Execute($sFolderNotCopied), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
 			EndIf
 		Else
 			If __FileCopy_Crypt($aDropFiles[$i], __TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & StringMid($aDropFiles[$i], StringInStr($aDropFiles[$i], "\", 0, -1) + 1)) = 0 Then
-				If _MsgBoxEx(52, "Fehler", "Die Datei '" & $aDropFiles[$i] & "' konnte nicht fehlerfrei kopiert werden. Fortfahren ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
+				If _MsgBoxEx(52, $sError, Execute($sFileNotCopied), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
 			EndIf
 		EndIf
 	Next
@@ -790,10 +742,12 @@ Func __AddNewObjects() ; Add new Objects to Treeview/Listview with Drag 'n Drop
 	__SplashGUI_SetState(@SW_HIDE)
 EndFunc   ;==>__AddNewObjects
 
+
 Func __RenameObjects()
 	Local $aSelItems, $sNewName, $bRescan = False
 	Local $iInputWidth = 250
 	Local $iInputHeight = 190
+	Local $sObjectToRename
 	$aSelItems = _GUICtrlListView_GetSelectedIndices($idListView, True)
 	If $aSelItems[0] > 0 Then
 		For $i = 1 To $aSelItems[0]
@@ -802,14 +756,15 @@ Func __RenameObjects()
 				; Umbenennen von Ordnern
 				Do
 					HotKeySet("{DEL}")
-					$sNewName = InputBox("Neuer Name", "Bitte geben sie einen neuen Namen für den Ordner '" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) & "' ein :", $sNewName, "", $iInputWidth, $iInputHeight, ($aWinPos[0] + ($aWinPos[2] / 2)) - ($iInputWidth / 2), ($aWinPos[1] + ($aWinPos[3] / 2)) - ($iInputHeight / 2))
+					$sObjectToRename = _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])
+					$sNewName = InputBox($sInputNewName, Execute($sInputNewFolderName), $sNewName, "", $iInputWidth, $iInputHeight, ($aWinPos[0] + ($aWinPos[2] / 2)) - ($iInputWidth / 2), ($aWinPos[1] + ($aWinPos[3] / 2)) - ($iInputHeight / 2))
 					HotKeySet("{DEL}", "__DeleteObjects")
 					If @error = 1 Then ExitLoop 2
 					If $sNewName <> "" And $sNewName <> _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) Then
 						If FileExists(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & $sNewName)) Then
-							If _MsgBoxEx(52, "Fehler", "Der Ordner '" & $sNewName & "' existiert bereits ! Soll er überschrieben werden ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 6 Then
+							If _MsgBoxEx(52, $sError, Execute($sFolderOverwrite), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 6 Then
 								If DirRemove(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & $sNewName), 1) = 0 Then
-									If _MsgBoxEx(52, "Fehler", "Der Ordner '" & $sNewName & "' konnte nicht überschrieben werden. Fortfahren ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then
+									If _MsgBoxEx(52, $sError, Execute($sFolderNotOverwrite), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then
 										ExitLoop 2
 									Else
 										$sNewName = ""
@@ -824,7 +779,8 @@ Func __RenameObjects()
 				Until $sNewName = _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])
 				If $sNewName <> _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) Then
 					If DirMove(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])), __Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & $sNewName)) = 0 Then
-						If _MsgBoxEx(52, "Fehler", "Der Ordner '" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) & "' konnte nicht umbenannt werden. Fortfahren ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
+						$sObjectToRename = _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])
+						If _MsgBoxEx(52, $sError, Execute($sFolderNotRenamed), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
 					Else
 						$bRescan = True
 					EndIf
@@ -833,14 +789,15 @@ Func __RenameObjects()
 				; Umbenennen von Dateien
 				Do
 					HotKeySet("{DEL}")
-					$sNewName = InputBox("Neuer Name", "Bitte geben sie einen neuen Namen für die Datei '" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) & "' ein :", $sNewName, "", $iInputWidth, $iInputHeight, ($aWinPos[0] + ($aWinPos[2] / 2)) - ($iInputWidth / 2), ($aWinPos[1] + ($aWinPos[3] / 2)) - ($iInputHeight / 2))
+					$sObjectToRename = _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])
+					$sNewName = InputBox($sInputNewName, Execute($sInputNewFilename), $sNewName, "", $iInputWidth, $iInputHeight, ($aWinPos[0] + ($aWinPos[2] / 2)) - ($iInputWidth / 2), ($aWinPos[1] + ($aWinPos[3] / 2)) - ($iInputHeight / 2))
 					HotKeySet("{DEL}", "__DeleteObjects")
 					If @error = 1 Then ExitLoop 2
 					If $sNewName <> "" And $sNewName <> _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) Then
 						If FileExists(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & $sNewName)) Then
-							If _MsgBoxEx(52, "Fehler", "Die Datei '" & $sNewName & "' existiert bereits ! Soll sie überschrieben werden ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 6 Then
+							If _MsgBoxEx(52, $sError, Execute($sFileOverwrite), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 6 Then
 								If FileDelete(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & $sNewName)) = 0 Then
-									If _MsgBoxEx(52, "Fehler", "Die Datei '" & $sNewName & "' konnte nicht überschrieben werden. Fortfahren ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then
+									If _MsgBoxEx(52, $sError, Execute($sFileNotOverwrite), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then
 										ExitLoop 2
 									Else
 										$sNewName = ""
@@ -855,7 +812,8 @@ Func __RenameObjects()
 				Until $sNewName = _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])
 				If $sNewName <> _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) Then
 					If FileMove(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])), __Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & $sNewName)) = 0 Then
-						If _MsgBoxEx(52, "Fehler", "Die Datei '" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) & "' konnte nicht umbenannt werden. Fortfahren ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
+						$sObjectToRename = _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])
+						If _MsgBoxEx(52, $sError, Execute($sFileNotRenamed) , "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
 					Else
 						$bRescan = True
 					EndIf
@@ -869,21 +827,25 @@ Func __RenameObjects()
 	EndIf
 EndFunc   ;==>__RenameObjects
 
+
 Func __DeleteObjects() ; Delete selected Objects in Listview
 	Local $aSelItems
+	Local $sObjectToDelete
 	If WinActive($hMainGui) Then
 		$aSelItems = _GUICtrlListView_GetSelectedIndices($idListView, True)
-		If $aSelItems[0] > 0 And _MsgBoxEx(52, "Nachfrage", "Sollen die markierten Dateien/Ordner wirklich gelöscht werden ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 6 Then
-			__SplashGUI_SetState(@SW_SHOW, "Objekte werden gelöscht...")
+		If $aSelItems[0] > 0 And _MsgBoxEx(52, $sRequest, $sObjectsDelete, "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 6 Then
+			__SplashGUI_SetState(@SW_SHOW, $sObjectsAreDeleted)
 			For $i = 1 To $aSelItems[0]
 				If StringInStr(FileGetAttrib(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]))), "D") Then
 					If DirRemove(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])), 1) = 0 Then
-						If _MsgBoxEx(52, "Fehler", "Der Ordner '" & __TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) & "' konnte nicht gelöscht werden. Fortfahren ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
+						$sObjectToDelete = __TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])
+						If _MsgBoxEx(52, $sError, Execute($sFolderNotDeleted), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
 					EndIf
 					_GUICtrlTreeView_Delete($idTreeView, _GUICtrlTreeView_FindItem($idTreeView, _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]), False, _GUICtrlTreeView_GetSelection($idTreeView)))
 				Else
 					If FileDelete(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]))) = 0 Then
-						If _MsgBoxEx(52, "Fehler", "Die Datei '" & __TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) & "' konnte nicht gelöscht werden. Fortfahren ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
+						$sObjectToDelete = __TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])
+						If _MsgBoxEx(52, $sError, Execute($sFileNotDeleted), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
 					EndIf
 				EndIf
 			Next
@@ -898,22 +860,23 @@ Func __DeleteObjects() ; Delete selected Objects in Listview
 	EndIf
 EndFunc   ;==>__DeleteObjects
 
+
 Func __AddNewFolder() ; Add new Folder to Treeview/Listview with Contextmenue
 	Local $FolderName, $FolderNameC
-	HotKeySet("{DEL}",)
-	$FolderName = InputBox("Ordnername ?", " ", "Neuer Ordner")
+	HotKeySet("{DEL}")
+	$FolderName = InputBox($sInputNewFolder, " ", $sInputDefaultFolder)
 	HotKeySet("{DEL}", "__DeleteObjects")
 	If $FolderName <> "" Then
-		__SplashGUI_SetState(@SW_SHOW, "Ordner wird verschlüsselt...")
+		__SplashGUI_SetState(@SW_SHOW, $sFolderEncrypted)
 		$FolderNameC = __Encrypt_Name($FolderName)
 		If FileExists(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView))) & "\" & $FolderNameC) Then
 			__SplashGUI_SetState(@SW_HIDE)
-			_MsgBoxEx(49, "Fehler", "Der Ordner '" & $FolderName & "' existiert bereits !", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1)
+			_MsgBoxEx(49, $sError, Execute($sFolderExists), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1)
 			Return SetError(1, 0, 0)
 		EndIf
 		If DirCreate(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView))) & "\" & $FolderNameC) = 0 Then
 			__SplashGUI_SetState(@SW_HIDE)
-			_MsgBoxEx(49, "Fehler", "Der Ordner '" & $FolderName & "' konnte nicht erzeugt werden !", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1)
+			_MsgBoxEx(49, $sError, Execute($sFolderNotCreated), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1)
 			Return SetError(1, 0, 0)
 		Else
 			__SplashGUI_SetState(@SW_HIDE)
@@ -929,19 +892,19 @@ EndFunc   ;==>__AddNewFolder
 
 Func __AddNewFile() ; Add new File to Listview with Contextmenue
 	Local $FileName
-	HotKeySet("{DEL}",)
-	$FileName = InputBox("Dateiname ?", " ", "Neu.txt")
+	HotKeySet("{DEL}")
+	$FileName = InputBox($sInputNewFile, " ", $sInputDefaultFile)
 	HotKeySet("{DEL}", "__DeleteObjects")
 	If $FileName <> "" Then
 		If FileExists(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & $FileName)) Then
 			__SplashGUI_SetState(@SW_HIDE)
-			_MsgBoxEx(48, "Fehler", "Die Datei '" & $FileName & "' existiert bereits !", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1)
+			_MsgBoxEx(48, $sError, Execute($sFileExists), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1)
 			Return SetError(1, 0, 0)
 		EndIf
-		__SplashGUI_SetState(@SW_SHOW, "Datei wird verschlüsselt...")
+		__SplashGUI_SetState(@SW_SHOW, $sFileEncrypted)
 		If FileWrite(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & $FileName), "") = 0 Then
 			__SplashGUI_SetState(@SW_HIDE)
-			_MsgBoxEx(48, "Fehler", "Die Datei '" & $FileName & "' konnte nicht angelegt werden !", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1)
+			_MsgBoxEx(48, $sError, Execute($sFileNotCreated), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1)
 		Else
 			__SplashGUI_SetState(@SW_HIDE)
 			__TreeView_FillFolder($idTreeView)
@@ -967,10 +930,10 @@ Func __DirCopy_Crypt_Recursiv($sSource, $sDestination, $bOverwrite = False)
 	$sItemDisplay = StringTrimRight($sSource, 1)
 	If StringLen($sItemDisplay) > 45  Then $sItemDisplay = "..." & StringRight($sItemDisplay, 42)
 	If Not FileExists($sDestinationC) Then
-		__SplashGUI_SetState(@SW_SHOW, "Objekte werden verschlüsselt...", "Verzeichnis: " & $sItemDisplay) ; Ordner-Anzeige aktualisieren
+		__SplashGUI_SetState(@SW_SHOW, $sObjectsEncrypted, $sFolderPrefix & " " & $sItemDisplay) ; Ordner-Anzeige aktualisieren
 		$Ret = DirCreate($sDestinationC)
 		If $Ret = 0 Then
-			If _MsgBoxEx($MB_YESNO, "Fehler", "Fehler beim Erzeugen vom Ordner: " & @CRLF & @CRLF & $sDestinationC & @CRLF & @CRLF & "Fortfahren ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = $IDNO Then
+			If _MsgBoxEx($MB_YESNO, $sError, $sErrFolderCreatePrefix & @CRLF & @CRLF & $sDestinationC & @CRLF & @CRLF & $sContinue, "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = $IDNO Then
 				Return SetError(5,0,0)
 			EndIf
 		EndIf
@@ -992,11 +955,11 @@ Func __DirCopy_Crypt_Recursiv($sSource, $sDestination, $bOverwrite = False)
 					Case 1
 						Return SetError(1, 0, 0)
 					Case 2
-						If _MsgBoxEx($MB_YESNO, "Pfadlänge", "Kryptierter Pfad bei ZU LANG (>259) bei:" & @CRLF & @CRLF & $sObject & @CRLF & @CRLF & "Fortsetzen ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = $IDNO Then
+						If _MsgBoxEx($MB_YESNO, $sPathLength, $sCryptPathToLong & @CRLF & @CRLF & $sObject & @CRLF & @CRLF & $sContinue, "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = $IDNO Then
 							Return SetError(2, 0, 0)
 						EndIf
 					Case 3
-						If _MsgBoxEx($MB_YESNO, "Fehler", "Allg. Fehler beim Kopieren der Datei:" & @CRLF & @CRLF & $sObject & @CRLF & @CRLF & "Fortsetzen ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = $IDNO Then
+						If _MsgBoxEx($MB_YESNO, $sError, $sCopyFileErrorGeneral & @CRLF & @CRLF & $sObject & @CRLF & @CRLF & $sContinue, "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = $IDNO Then
 							Return SetError(3, 0, 0)
 						EndIf
 				EndSwitch
@@ -1006,6 +969,7 @@ Func __DirCopy_Crypt_Recursiv($sSource, $sDestination, $bOverwrite = False)
 	FileClose($hSearch)
 	Return SetError(0, 0, 1)
 EndFunc   ;==>__DirCopy_Crypt_Recursiv
+
 
 Func __FileCopy_Crypt($sSource, $sDestination, $bOverwrite = False)
 	; Rückgabewert im Fehlerfall ist 0 und @error ist:
@@ -1019,7 +983,7 @@ Func __FileCopy_Crypt($sSource, $sDestination, $bOverwrite = False)
 	If StringLen($sDestinationC) > 259 Then Return SetError(2, 0, 0)
 	Select
 		Case FileExists($sDestinationC) = True And $bOverwrite = False
-			If _MsgBoxEx(36, "Überschreiben ?", "Die Datei '" & $sDestination & "' existiert bereits. Soll sie überschrieben werden ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 6 Then
+			If _MsgBoxEx(36, $sOverWrite, Execute($sFileExistsOverwrite), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 6 Then
 				FileDelete($sDestinationC)
 				If FileGetSize($sSource) > 0 Then
 					$Ret = _AesEncryptFile($sKey, $sSource, $sDestinationC, "CFB")
@@ -1045,9 +1009,10 @@ Func __FileCopy_Crypt($sSource, $sDestination, $bOverwrite = False)
 	Return SetError(0, 0, 1)
 EndFunc   ;==>__FileCopy_Crypt
 
+
 Func __DecryptExecute($object)
 	Local $posBS, $FileName, $objectC, $Ret, $iPID, $aLinkDetails
-	__SplashGUI_SetState(@SW_SHOW, "Datei wird entschlüsselt...")
+	__SplashGUI_SetState(@SW_SHOW, $sFileDecrypted)
 	If Not FileExists($sVaultTemp) Then DirCreate($sVaultTemp)
 	$posBS = StringInStr($object, "\", 0, -1)
 	If $posBS > 0 Then
@@ -1069,7 +1034,7 @@ Func __DecryptExecute($object)
 				$iPID = __StartFile2($aLinkDetails[0])
 			Else
 				__Secure_FileDelete($sVaultTemp & "\" & $FileName)
-				__SplashGUI_SetState(@SW_SHOW, "Ziel nicht verfügbar !")
+				__SplashGUI_SetState(@SW_SHOW, $sDestinationNotAvailable)
 				Sleep(1000)
 			EndIf
 		Else		
@@ -1084,10 +1049,11 @@ Func __DecryptExecute($object)
 		EndIf
 	Else
 		__SplashGUI_SetState(@SW_HIDE)
-		_MsgBoxEx(48, "Fehler", "Die Datei '" & $FileName & "' konnte nicht entschlüsselt werden !", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1)
+		_MsgBoxEx(48, $sError, Execute($sFileNotDecrypted), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1)
 	EndIf
 	__SplashGUI_SetState(@SW_HIDE)
 EndFunc   ;==>__DecryptExecute
+
 
 Func __CheckPW()
 	Local $bCheck = False
@@ -1105,8 +1071,8 @@ Func __CheckPW()
 		; Kein Passwort als Parameter, dann abfragen...
 		If $sKey = "" Then
 			Do
-				$sKey = InputBox("Passwort ?", "Bitte geben Sie das Passwort ein:", "", "*", -1, -1, $aWinPos[0] + ($aWinPos[2] - 250) / 2, $aWinPos[1] + ($aWinPos[3] - 190) / 2)
-			Until $sKey <> "" Or _MsgBoxEx(53, "Fehler", "Ohne ein Passwort kann nicht verschlüsselt werden !", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 2
+				$sKey = InputBox($sInputPassword, $sInputPleasePassword, "", "*", -1, -1, $aWinPos[0] + ($aWinPos[2] - 250) / 2, $aWinPos[1] + ($aWinPos[3] - 190) / 2)
+			Until $sKey <> "" Or _MsgBoxEx(53, $sError, $sWithoutPwNotCrypted, "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 2
 		EndIf
 		If $sKey = "" Then __ExitApp(False)
 		If IsArray($aInVault) And ($aInVault[1] + $aInVault[2]) > 0 Then
@@ -1119,11 +1085,12 @@ Func __CheckPW()
 			EndIf
 			If StringLeft(Blowfish($sKey, BinaryToString(_Base64Decode(StringReplace(StringReplace($object, "_", "/"), "-", "+"))), 1), StringLen($sIdent)) = $sIdent Then $bCheck = True
 		Else
-			$sSecondPW = InputBox("Prüfung ?", "Bitte geben Sie das Passwort zur Überprüfung ein zweites mal ein:", "", "*", -1, -1, $aWinPos[0] + ($aWinPos[2] - 250) / 2, $aWinPos[1] + ($aWinPos[3] - 190) / 2)
+			$sSecondPW = InputBox($sInputCheck, $sInputPleasePasswordSecond, "", "*", -1, -1, $aWinPos[0] + ($aWinPos[2] - 250) / 2, $aWinPos[1] + ($aWinPos[3] - 190) / 2)
 		EndIf
-	Until $bCheck = True Or $sSecondPW = $sKey Or _MsgBoxEx(53, "Passwortfehler", "Eingegebene Passwörter sind nicht korrekt ! Wiederholen ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 2
+	Until $bCheck = True Or $sSecondPW = $sKey Or _MsgBoxEx(53, $sPasswordError, $sWrongPasswordAgain, "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 2
 	If $bCheck = False And $sSecondPW <> $sKey Then __ExitApp(False)
 EndFunc   ;==>__CheckPW
+
 
 Func __Encrypt_Name($sName)
 	Local $Ret, $sOut, $aPathSplits, $iPoiPos, $sTrailing
@@ -1212,46 +1179,53 @@ Func __Decrypt_Name($sName)
 	Return SetError(1, 0, 0)
 EndFunc   ;==>__Decrypt_Name
 
+
 Func __DecryptAll() ; Decrypt all selected Objects in Listview
 	Local $aSelItems, $bErrorDetect = False, $sDecryptTargetNew
+	Local $sObjectToDecrypt
 	$aSelItems = _GUICtrlListView_GetSelectedIndices($idListView, True)
 	If $aSelItems[0] > 0 Then
-		$sDecryptTargetNew = FileSelectFolder("Bitte Zielordner wählen", $sDecryptTarget, 7, $sDecryptTarget)
+		$sDecryptTargetNew = FileSelectFolder($sSelectFolder, $sDecryptTarget, 7, $sDecryptTarget)
 		If $sDecryptTargetNew = "" Then Return SetError(1, 0, 0)
 		$sDecryptTarget = $sDecryptTargetNew
 		If StringRight($sDecryptTarget, 1) <> "\" Then $sDecryptTarget &= "\"
-		__SplashGUI_SetState(@SW_SHOW, "Objekte werden entschlüsselt...")
+		__SplashGUI_SetState(@SW_SHOW, $sObjectsDecrypted)
 		For $i = 1 To $aSelItems[0]
 			If StringInStr(FileGetAttrib(__Encrypt_Name(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]))), "D") Then
 				If FileExists($sDecryptTarget & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])) Then
-					If _MsgBoxEx(36, "Ziel nutzen ?", "Die Zielordner '" & $sDecryptTarget & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) & "' existiert bereits. Soll er für den Entschlüsselungsvorgang genutzt werden ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then
+					$sObjectToDecrypt = $sDecryptTarget & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])
+					If _MsgBoxEx(36, $sUseTarget, Execute($sDecryptFolderExistsUsed), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then
 						$bErrorDetect = True
 						ExitLoop
 					EndIf
 				EndIf
 				If __DecryptFolder_Recursiv(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]), $sDecryptTarget & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])) = 0 Then
 					$bErrorDetect = True
-					If _MsgBoxEx(52, "Fehler", "Der Ordner '" & __TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) & "' konnte nicht entschlüsselt werden. Fortfahren ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
+					$sObjectToDecrypt = __TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])
+					If _MsgBoxEx(52, $sError, Execute($sDecryptFolderExistsContinue), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
 				EndIf
 			Else
 				If __DecryptFile(__TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]), $sDecryptTarget) = 0 Then
 					$bErrorDetect = True
-					If _MsgBoxEx(52, "Fehler", "Die Datei '" & __TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i]) & "' konnte nicht entschlüsselt werden. Fortfahren ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
+					$sObjectToDecrypt = __TreeView_GetFullPath($idTreeView, _GUICtrlTreeView_GetSelection($idTreeView)) & "\" & _GUICtrlListView_GetItemText($idListView, $aSelItems[$i])
+					If _MsgBoxEx(52, $sError, Execute($sDecryptFileExistsContinue), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 7 Then ExitLoop
 				EndIf
 			EndIf
 		Next
 	EndIf
 	If $bErrorDetect = False Then
-		__SplashGUI_SetState(@SW_SHOW, "Entschlüsselung erfolgreich beendet !")
+		__SplashGUI_SetState(@SW_SHOW, $sDecryptSuccessful)
 	Else
-		__SplashGUI_SetState(@SW_SHOW, "Entschlüsselung mit Fehlern beendet !")
+		__SplashGUI_SetState(@SW_SHOW, $sDecryptWithError)
 	EndIf
 	Sleep(2000)
 	__SplashGUI_SetState(@SW_HIDE)
 EndFunc   ;==>__DecryptAll
 
+
 Func __DecryptFile($sSource, $sDestination, $bOverwrite = False)
 	Local $Ret, $sSourceC, $iPosBS, $sFilename
+	Local $sObjectToDecrypt
 	If $sSource = "" Or $sDestination = "" Then Return SetError(1, 0, 0)
 	$iPosBS = StringInStr($sSource, "\", 0, -1)
 	If $iPosBS > 0 Then
@@ -1262,7 +1236,8 @@ Func __DecryptFile($sSource, $sDestination, $bOverwrite = False)
 	$sSourceC = __Encrypt_Name($sSource)
 	Select
 		Case FileExists($sDestination & "\" & $sFileName) = True And $bOverwrite = False
-			If _MsgBoxEx(36, "Überschreiben ?", "Die Datei '" & $sDestination & "\" & $sFileName & "' existiert bereits. Soll sie überschrieben werden ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 6 Then
+			$sObjectToDecrypt = $sDestination & "\" & $sFileName
+			If _MsgBoxEx(36, $sOverWrite, Execute($sDecryptFileExistsOverwrite), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 6 Then
 				FileDelete($sDestination & "\" & $sFileName)
 				If FileGetSize($sSourceC) > 0 Then
 					$Ret = _AesDecryptFile($sKey, $sSourceC, $sDestination & "\" & $sFileName, "CFB")
@@ -1288,6 +1263,7 @@ Func __DecryptFile($sSource, $sDestination, $bOverwrite = False)
 	Return SetError(0, 0, 1)
 EndFunc   ;==>__DecryptFile
 
+
 Func __DecryptFolder_Recursiv($sSource, $sDestination, $bOverwrite = False)
 	Local $hSearch, $sObject, $sObjectC, $Ret, $sSourceC, $sItemDisplay
 	If StringRight($sDestination, 1) <> "\" Then $sDestination &= "\"
@@ -1299,7 +1275,7 @@ Func __DecryptFolder_Recursiv($sSource, $sDestination, $bOverwrite = False)
 	$sSourceC = __Encrypt_Name($sSource)
 	$sItemDisplay = StringTrimRight($sSource, 1)
 	If StringLen($sItemDisplay) > 45  Then $sItemDisplay = "..." & StringRight($sItemDisplay, 42)
-	__SplashGUI_SetState(@SW_SHOW, "Objekte werden entschlüsselt...", "Verzeichnis: " & $sItemDisplay)
+	__SplashGUI_SetState(@SW_SHOW, $sObjectsDecrypted, $sFolderPrefix & " " & $sItemDisplay)
 	$hSearch = FileFindFirstFile($sSourceC & "*.*")
 	While 1
 		$sObjectC = FileFindNextFile($hSearch)
@@ -1324,7 +1300,6 @@ Func __WM_NOTIFY($hWnd, $iMsg, $iwParam, $ilParam) ;Notify func
 	Local $__h_LV = ControlGetHandle($hwnd, "", $idListView)
 	Local $tNMHDR = DllStructCreate($tagNMHDR, $ilParam)
 	Local $hWndFrom = HWnd(DllStructGetData($tNMHDR, "hWndFrom"))
-	Local $iIDFrom = DllStructGetData($tNMHDR, "IDFrom")
 	Local $iCode = DllStructGetData($tNMHDR, "Code")
 	If $iCode = -12 Or $iCode = -17 Then Return False
 	Switch $hWndFrom
@@ -1334,7 +1309,7 @@ Func __WM_NOTIFY($hWnd, $iMsg, $iwParam, $ilParam) ;Notify func
 				Case $NM_DBLCLK
 					If $item[0] <> 0 Then
 						$filefolder = _GUICtrlListView_GetSelectedIndices($idListView, True)
-						If _GUICtrlListView_GetItemText($idListView, $filefolder[1], 1) = "Ordner" Or _GUICtrlListView_GetItemText($idListView, $filefolder[1], 1) = "Folder" Then
+						If _GUICtrlListView_GetItemText($idListView, $filefolder[1], 1) = $sFolderDescription Or _GUICtrlListView_GetItemText($idListView, $filefolder[1], 1) = "Folder" Then
 							$idx = _GUICtrlTreeView_GetSelection($idTreeView)
 							$item = StringTrimLeft($item[1], StringInStr($item[1], "\", 0, -1))
 							$found = _GUICtrlTreeView_FindItem($idTreeView, $item, False, $idx)
@@ -1367,6 +1342,7 @@ Func __WM_NOTIFY($hWnd, $iMsg, $iwParam, $ilParam) ;Notify func
 	EndSwitch
 EndFunc   ;==>__WM_NOTIFY
 
+
 Func __WM_DROPFILES_FUNC($hWnd, $msgID, $wParam, $lParam)
 	Local $nSize, $pFileName
 	Local $nAmt = DllCall('shell32.dll', 'int', 'DragQueryFileW', 'hwnd', $wParam, 'int', 0xFFFFFFFF, 'ptr', 0, 'int', 255)
@@ -1381,17 +1357,21 @@ Func __WM_DROPFILES_FUNC($hWnd, $msgID, $wParam, $lParam)
 	Next
 EndFunc   ;==>__WM_DROPFILES_FUNC
 
+
 Func __WM_Move()
 	$aWinPos = WinGetPos($hMainGui)
 	Local $aPosChild = WinGetPos($hSplashGUI)
+	If IsArray($aPosChild) Then
 	Local $iXDiff = ($aWinPos[2] - $aPosChild[2]) / 2
 	Local $iYDiff = ($aWinPos[3] - $aPosChild[3]) / 2
 	WinMove($hSplashGUI, '', $aWinPos[0] + $iXDiff, $aWinPos[1] + $iYDiff)
 	$aTreePos = ControlGetPos($hMainGui, "", $idTreeView)
 	$aListPos = ControlGetPos($hMainGui, "", $idListView)
 	__ColumnResize($idListView)
+	EndIf
 	Return $GUI_RUNDEFMSG
 EndFunc   ;==>__WM_Move
+
 
 Func __CheckStartedFiles()
 	Local $sFileName
@@ -1404,8 +1384,8 @@ Func __CheckStartedFiles()
 				Else
 					$sFileName = $aStartedFiles[$i][1]
 				EndIf
-				If _MsgBoxEx(36, "Zurückschreiben ?", "Die Datei '" & $sFileName & "' wurde verändert ! Soll sie neu verschlüsselt werden ?", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 6 Then
-					__SplashGUI_SetState(@SW_SHOW, "Datei wird aktualisiert...")
+				If _MsgBoxEx(36, $sWriteBack, Execute($sFileEncryptNew), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1) = 6 Then
+					__SplashGUI_SetState(@SW_SHOW, $sFileUpdated)
 					__FileCopy_Crypt($aStartedFiles[$i][1], $aStartedFiles[$i][2], True)
 					Sleep(100)
 					__SplashGUI_SetState(@SW_HIDE)
@@ -1427,7 +1407,7 @@ Func __SplashGUI_SetState($State = @SW_SHOW, $sText = "", $sAddInfo = "")
 		If $sText <> "" Then GUICtrlSetData($idSplashLabel, $sText)
 		GUICtrlSetData($idSplashLabelAddInfo, $sAddInfo)
 	Else
-		GUICtrlSetData($idSplashLabel, "Aktion wird durchgeführt...")
+		GUICtrlSetData($idSplashLabel, $sActionExecuted)
 		GUICtrlSetData($idSplashLabelAddInfo, "")
 	EndIf
 	GUISetState($State, $hSplashGUI)
@@ -1542,6 +1522,8 @@ Func __StartFile2($sFilePath, Const $sParams = '', Const $WorkDir = @WorkingDir,
 	EndIf
 	; es konnte keine passende Applikation zur Dateiendung gefunden werden
 	If $sFileTypeCmd = "" Then Return SetError(4, Opt("ExpandEnvStrings", $iOldOpt), 0)
+	; Anpassung für RJTextEd damit immer ein eigenes Fenster geöffnet wird
+	If StringInStr($sFileTypeCmd, '\TextEd.exe') Then $sFileTypeCmd=StringReplace($sFileTypeCmd, ' "%1"', ' /multi "%1"')
 	; die Platzhalter werden möglichst mit dem übergebenen Dateinamen ersetzt
 	; Platzhalter "/dde" ist bei Microsoft Excel 2010 notwendig
 	$sRunStatement = FileGetLongName(StringRegExpReplace($sFileTypeCmd, '("?(?:%1|%L|/dde)"?)', StringReplace('"' & $sFilePath & '"', "\", "\\")))
@@ -1613,8 +1595,8 @@ Func __GUICtrlListView_SortItems($hWnd, $iCol, $__bReSort = False)
 		$__g_aListViewSortInfo[$iIndex][3] = $iCol
 		$__g_aListViewSortInfo[$iIndex][5] = 1
 	EndIf
-	$__g_aListViewSortInfo[$iIndex][7] = 0 ; $bSet
-	$__g_aListViewSortInfo[$iIndex][4] = $__g_aListViewSortInfo[$iIndex][6] ; nCurCol = $nCol
+	$__g_aListViewSortInfo[$iIndex][7] = 0
+	$__g_aListViewSortInfo[$iIndex][4] = $__g_aListViewSortInfo[$iIndex][6]
 	If $__bReSort = True And $__iItemCount > 1 Then ; change direction if resort is requested and >=1 items available
 		$__g_aListViewSortInfo[$iIndex][5] *= -1
 	Else
@@ -1704,6 +1686,7 @@ Func __GetIcon_ShellHandler($__sIconNamePathAndExt, ByRef $__hImageList)
 	Return $__sOutputName
 EndFunc
 
+
 Func __GetSystemImageList( $iIconSize )
 	Local Static $sIID_IImageList = "{46EB5926-582E-4017-9FDF-E8998DAA0950}"
 	Local Static $tRIID_IImageList = _WinAPI_GUIDFromString( $sIID_IImageList )
@@ -1712,6 +1695,7 @@ Func __GetSystemImageList( $iIconSize )
 	If $aRet[0] Then Return SetError($aRet[0],0,0)
 	Return $aRet[3]
 EndFunc
+
 
 Func __GetIconIndex($sFileName)
 	_WinAPI_CoInitialize()
@@ -1725,19 +1709,239 @@ Func __GetIconIndex($sFileName)
 	Return $iIcon
 EndFunc
 
+
 Func __ShellGetFileInfo($pPIDL, $iFlags, $iAttributes, ByRef $tSHFILEINFO)
 	Local $aRet = DllCall('shell32.dll', 'dword_ptr', 'SHGetFileInfoW', 'ptr', $pPIDL, 'dword', $iAttributes, 'struct*', $tSHFILEINFO, 'uint', DllStructGetSize($tSHFILEINFO), 'uint', $iFlags)
 	If @error Then Return SetError(@error, @extended, 0)
 	Return $aRet[0]
 EndFunc
 
+
 Func __ShowShortInfo()
-	_MsgBoxEx(48, "Info", "Kurzanleitung zu AKrypto" & @CRLF & @CRLF & _
-		"Da kein Passwort verschlüsslet abgelegt wird, erfolgt die Passwortabfrage" & @CRLF & _
-		"beim Start 2mal, solange keine Dateien oder Ordner verschlüsselt hinzugefügt" & @CRLF & _
-		"wurden. Dies kann per Kontextmenü oder per Drag'nDrop geschehen." & @CRLF & @CRLF & _
-		"Entschlüsselte Dateien werden für die Ansicht/Bearbeitung entschlüsselt im Ordner" & @CRLF & _
-		"'VaultTemp' abgelegt und spätestens bei Programmende sicher wieder gelöscht." & @CRLF & _
-		"Sollte ein 'Sicheres Löschen' des VaultTemp nicht möglich sein, wird beim" & @CRLF & _
-		"Programmende darauf hingewiesen.", "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1, 0, False)
+	_MsgBoxEx(48, $sInfo, Execute($sInfoText), "", "", ($aWinPos[0] + ($aWinPos[2] / 2)) * -1, ($aWinPos[1] + ($aWinPos[3] / 2)) * -1, 0, False)
+EndFunc
+
+
+Func __InitGUIs($bReInit = False) ; GUI & SplashGUI initialisieren oder neu initialisieren
+	Local $__aTreePos
+	$bInitSort = True
+	
+	If $bReInit=True Then ; Positionen merken und alte GUI löschen
+		If $hMainGui Then
+			$aWinPos = WinGetPos($hMainGui)
+			$iWinXPos = $aWinPos[0]
+			$iWinYPos = $aWinPos[1]
+			$iWinWidth = $aWinPos[2]
+			$iWinHeight = $aWinPos[3]
+			$__aTreePos = ControlGetPos($hMainGui, "", $idTreeView)
+			$iTreeWidth = $__aTreePos[2]
+			_GUICtrlListView_UnRegisterSortCallBack($idListView)
+			GUIDelete($hMainGui)
+		EndIf
+	EndIf
+
+	__LanguageIni_Read_Data($sSelectedLanguageIni)
+	If @Error Then
+		__LanguageIni_Read_List($aLanguage)
+		__LanguageIni_Read_Data($sSelectedLanguageIni)
+	EndIf
+		
+	
+	; Haupt-Oberfläche generieren
+	$hMainGui = GUICreate("AKrypto V" & $Version, 780, 370, -1, -1, $WS_SIZEBOX, BitOR($WS_EX_CLIENTEDGE, $WS_EX_ACCEPTFILES))
+	__GUI_LanguageMenu_Init()
+	$idMainGroup = GUICtrlCreateGroup("", 8, 2, 764, 318, $WS_CLIPSIBLINGS)
+	GUICtrlSetResizing($idMainGroup, $GUI_DOCKLEFT + $GUI_DOCKRIGHT + $GUI_DOCKTOP + $GUI_DOCKBOTTOM)
+	$idTreeView = GUICtrlCreateTreeView(15, 10, 250, 308, BitOR($TVS_HASBUTTONS, $TVS_HASLINES, $TVS_LINESATROOT, $TVS_SHOWSELALWAYS, $WS_GROUP, $WS_TABSTOP, $WS_BORDER))
+	GUICtrlSetResizing($idTreeView, $GUI_DOCKAUTO)
+	$idListView = GUICtrlCreateListView($sListViewHeader, 265, 10, 502, 308, BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
+	GUICtrlSetState($idListView, $GUI_DROPACCEPTED)
+	GUICtrlSetResizing($idListView, $GUI_DOCKAUTO)
+	_GUICtrlListView_HideColumn ($idListView, 4)
+	_GUICtrlListView_RegisterSortCallBack($idListView, 2, True)
+	; Position der Haupt-Oberfläche ermitteln, da variabel bei der Ersterstellung
+	$aWinPos = WinGetPos($hMainGui)
+	; Position & Größe der Taskleiste ermitteln
+	$aTrayPos = WinGetPos("[CLASS:Shell_TrayWnd]", "")
+	$idLVContextMenu = GUICtrlCreateContextMenu($idListView)
+	$idLVGetShortInfo = GUICtrlCreateMenuItem($sPrgShortInfo, $idLVContextMenu)
+	GUICtrlCreateMenuItem("", $idLVContextMenu)
+	$idLVNewFolder = GUICtrlCreateMenuItem($sNewFolder, $idLVContextMenu)
+	$idLVNewFile = GUICtrlCreateMenuItem($sNewFile, $idLVContextMenu)
+	$idLVDecryptAll = GUICtrlCreateMenuItem($sDecompressTo, $idLVContextMenu)
+	$idLVSelectAll = GUICtrlCreateMenuItem($sMarkAll, $idLVContextMenu)
+	$idLVSelectNone = GUICtrlCreateMenuItem($sMarkNone, $idLVContextMenu)
+	$idLVItemRename = GUICtrlCreateMenuItem($sRename, $idLVContextMenu)
+	$idLVItemDelete = GUICtrlCreateMenuItem($sDelete, $idLVContextMenu)
+	GUISetState(@SW_HIDE, $hMainGui) ; notwendig (obwohl aktuell nicht sichtbar) damit WinMove & AutoResize von TV/LV funktionieren
+	
+	; SplashText-Oberfläche generieren
+	If $hSplashGUI Then GUIDelete($hSplashGUI) ; alte SplashGUI bei Bedarf löschen
+	$hSplashGUI = GUICreate("", 350, 55, $aWinPos[0] + (($aWinPos[2] - 350) / 2), $aWinPos[1] + (($aWinPos[3] - 25) / 2), $WS_POPUP, Default, $hMainGui)
+	GUISetBkColor(0xFFFC70, $hSplashGUI)
+	$idSplashLabel = GUICtrlCreateLabel($sActionPerformed, 5, 5, 340, 25, 1)
+	GUICtrlSetColor(-1, 0x000000)
+	GUICtrlSetBkColor(-1, 0xFFFC70)
+	GUICtrlSetFont(-1, 14, 400, -1, "Comic Sans MS")
+	$idSplashLabelAddInfo = GUICtrlCreateLabel("", 5, 30, 340, 20, 1)
+	GUICtrlSetColor(-1, 0x000000)
+	GUICtrlSetBkColor(-1, 0xFFFC70)
+	GUICtrlSetFont(-1, 8.5, 400, -1, "Comic Sans MS")
+	
+	; ImageList für TreeView erzeugen
+	$hTVImageList = _GUIImageList_Create(16, 16, 5, 2) ;Treeview Icon Image List
+	_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 3) ;Folder
+	_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 4) ;Folder Open
+	_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 181) ;Cdr
+	_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 8) ;Fixed
+	_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 7) ;Removable
+	_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 9) ;Network
+	_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 11) ;CDRom
+	_GUIImageList_AddIcon($hTVImageList, @SystemDir & "\shell32.dll", 109) ;No Symbol for Burner
+	_GUICtrlTreeView_SetNormalImageList($idTreeView, $hTVImageList)
+	
+	GUIRegisterMsg($WM_DROPFILES, '__WM_DROPFILES_FUNC')
+	GUIRegisterMsg($WM_NOTIFY, "__WM_NOTIFY")
+	GUIRegisterMsg($WM_MOVE, '__WM_Move')
+	GUIRegisterMsg($WM_SIZE, '__WM_Move')
+	
+	; Bei Erstinitialisierung Voreinstellungen versuchen aus INI zu laden
+	If $bReInit = False Then
+		$iWinXPos = IniRead($sIniFile, "MainGUI", "WinXPos", "")
+		$iWinYPos = IniRead($sIniFile, "MainGUI", "WinYPos", "")
+		$iWinWidth = IniRead($sIniFile, "MainGUI", "WinWidth", "")
+		$iWinHeight = IniRead($sIniFile, "MainGUI", "WinHeight", "")
+		$iTreeWidth = IniRead($sIniFile, "MainGUI", "TreeWidth", "")
+		$sVaultDir = IniRead($sIniFile, "Options", "VaultDir", @ScriptDir & "\Vault")
+		If StringRight($sVaultDir, 1) = "\" Then $sVaultDir = StringLeft($sVaultDir, StringLen($sVaultDir) - 1)
+		$sVaultTemp = IniRead($sIniFile, "Options", "VaultTemp", @ScriptDir & "\VaultTemp")
+		If StringLeft($sVaultTemp, 1) = "@" Then $sVaultTemp = Execute($sVaultTemp)
+		If StringRight($sVaultTemp, 1) = "\" Then $sVaultTemp = StringTrimRight($sVaultTemp, 1)
+		$sDecryptTarget = IniRead($sIniFile, "Options", "DecryptTarget", "")
+	EndIf
+	; Anhand der bisherigen oder der geladenen Daten, das Fenster ggf. neu positionieren
+	If $iWinXPos <> "" And $iWinYPos <> "" Then
+		If $iWinXPos < 0 Then $iWinXPos = 0
+		If $iWinYPos < 0 Then $iWinYPos = 0
+		If $iWinWidth < 200 Then $iWinWidth = 200
+		If $iWinHeight < 100 Then $iWinHeight = 100
+		If $iWinWidth > $aDesktopData[0] Then $iWinWidth = $aDesktopData[0]
+		If $iWinHeight > $aDesktopData[1] Then $iWinHeight = $aDesktopData[1]
+		$iFreeX = $aDesktopData[0] - $iWinWidth
+		$iFreeY = $aDesktopData[1] - $iWinHeight
+		If $aTrayPos[1] = 0 And $aTrayPos[2] > 0 Then
+			$iFreeX = $aDesktopData[0] - $aTrayPos[2] - $iWinWidth
+		EndIf
+		If $aTrayPos[0] = 0 And $aTrayPos[3] > 0 Then
+			$iFreeY = $aDesktopData[1] - $aTrayPos[3] - $iWinHeight
+		EndIf
+		If $iWinXPos > ($iFreeX) Then $iWinXPos = $iFreeX
+		If $iWinYPos > ($iFreeY) Then $iWinYPos = $iFreeY
+		WinMove($hMainGui, "", $iWinXPos, $iWinYPos, $iWinWidth, $iWinHeight)
+		GUISetState(@SW_SHOW, $hMainGui)
+		$aWinPos = WinGetPos($hMainGui)
+		If $iTreeWidth <> "" Then
+			If $iTreeWidth < 20 Then $iTreeWidth = 20
+			If $iTreeWidth > ($aListPos[0] + $aListPos[2] - 20) Then $iTreeWidth = ($aListPos[0] + $aListPos[2] - 20)
+			GUICtrlSetPos($idTreeView, $aTreePos[0], $aTreePos[1], $iTreeWidth)
+			GUICtrlSetPos($idListView, $aTreePos[0] + $iTreeWidth, $aListPos[1], $aListPos[2] + $aTreePos[2] - $iTreeWidth)
+		EndIf
+	Else
+		GUISetState(@SW_SHOW, $hMainGui)
+	EndIf
+	
+	; ListView Spaltenbreiten anpassen
+	__ColumnResize($idListView)
+	
+	; Neue Positionsinformationen für das TreeView- & ListView-Element
+	; ermitteln, da sich diese nach dem Verschieben oder ändern der Größe
+	; verändert haben können (Auto-Resizing der beiden Elemente)
+	$aTreePos = ControlGetPos($hMainGui, "", $idTreeView)
+	$aListPos = ControlGetPos($hMainGui, "", $idListView)
+	
+	; Frage nach Passwort beim ersten Start und prüfe dies
+	If $sKey = "" Then __CheckPW()
+	
+	; Lege Unterverzeichnis 'Vault' an, das TreeView mit dem ggf. bereits
+	; gefüllten Vault-Ordner füllen, sortieren, anschließend den Wurzel-
+	; Ordner auswählen und die erste Ebene erweitern(aufklappen)
+	If Not FileExists($sVaultDir) Then DirCreate($sVaultDir)
+	$idTreeViewRootItem = _GUICtrlTreeView_AddChild($idTreeView, "", $sVaultDir, 0, 1)
+	_GUICtrlTreeView_SelectItem($idTreeView, _GUICtrlTreeView_GetItemHandle($idTreeView, 0))
+	__TreeView_FillFolder($idTreeView)
+	__GUICtrlTreeView_Sort($idTreeView)
+	_SendMessage(GUICtrlGetHandle($idTreeView), $TVM_EXPAND, $TVE_EXPAND, $idTreeViewRootItem, 0, "wparam", "handle") ; TreeView nur Root erweitern (öffnen)
+EndFunc
+
+
+Func __LanguageIni_Read_List(ByRef $__aLng, $__LngIniPath = "")
+	; Liste der vorhandenen Sprach-INI-Dateien für das Sprachen-Menü einlesen
+	Local $__hLangIniFind, $__sLngIniFileName, $__sLngName
+	If $__LngIniPath = "" Then $__LngIniPath = @ScriptDir & "\Language\"
+	If UBound($__aLng) > 0 Then ReDim $__aLng[0]
+	$__hLangIniFind = FileFindFirstFile($__LngIniPath & "*.ini")
+	If $__hLangIniFind <> -1 Then
+		While 1
+			$__sLngIniFileName = FileFindNextFile($__hLangIniFind)
+			If @error then ExitLoop
+			$__sLngName = IniRead($__LngIniPath & $__sLngIniFileName, "AKryptoLanguage", "aLanguage", "")
+			If $__sLngName <> "" Then
+				ReDim $__aLng[UBound($__aLng) +1][3]
+				$__aLng[UBound($__aLng) -1][0] = $__sLngName
+				$__aLng[UBound($__aLng) -1][1] = $__sLngIniFileName
+			EndIf
+		Wend
+	EndIf
+	FileClose($__hLangIniFind)
+	If UBound($__aLng) < 1 Then Return SetError(1,0,0)
+	Return SetError(0,0,1)
+EndFunc
+
+
+Func __LanguageIni_Read_Data($__sLngIni = "")
+	; Sprachdaten aus INI-Datei einlesen und den Variablen zuweisen
+	If $__sLngIni = "" Then Return SetError(1,0,0)
+	If Not FileExists($__sLngIni) Then
+		$__sLngIni = @ScriptDir & "\Language\" & $__sLngIni
+	EndIf
+	If Not FileExists($__sLngIni) Then Return SetError(2,0,0)
+	$aLangIniData = IniReadSection($__sLngIni, "data")
+	If Not IsArray($aLangIniData) Then Return SetError(3,0,0)
+	; Eingelesene Sprachdaten den Variablen zuweisen
+	For $i = 1 To $aLangIniData[0][0]
+		Assign($aLangIniData[$i][0], BinaryToString(StringToBinary($aLangIniData[$i][1]), 1), 4)
+	Next
+	Return SetError(0,0,1)
+EndFunc
+
+
+Func __GUI_LanguageMenu_Change($__sNewLngIni)
+	; Wechsel zu einer anderen aufgeführten Sprache, soweit möglich
+	If $__sNewLngIni = "" Then Return SetError(1,0,0)
+	__LanguageIni_Read_List($aLanguage)
+	If @Error Then
+		_MsgBoxEx(49, "Fehler", "Keine gültige Sprachdateien im Unterordner '\Language\' gefunden !" & @CRLF & "(No valid language-file in subfolder '\Language\' found !)")
+		Return SetError(2,0,0)
+	EndIf
+	If _ArraySearch($aLanguage, $__sNewLngIni, 0, 0, 0, 0, 1, 1) >= 0 Then
+		$sSelectedLanguageIni = $__sNewLngIni
+		__InitGUIs(True)
+	Else
+		__GUI_LanguageMenu_Init()
+	EndIf
+	Return SetError(0,0,1)
+EndFunc
+
+
+Func __GUI_LanguageMenu_Init()
+	; Sprachmenü der GUI erstellen/erneuern
+	If $sMenueLanguage = "" Then Return SetError(1,0,0)
+	If $hLanguageMenue Then GUICtrlDelete($hLanguageMenue)
+	$hLanguageMenue = GUICtrlCreateMenu("&" & $sMenueLanguage)
+	If UBound($aLanguage) <= 0 Then Return SetError(2,0,0)
+    For $i = 0 To UBound($aLanguage) -1
+    	$aLanguage[$i][2] = GUICtrlCreateMenuItem($aLanguage[$i][0], $hLanguageMenue, -1, 1)
+    	If $sSelectedLanguageIni = $aLanguage[$i][1] Then GUICtrlSetState(-1, $GUI_CHECKED)
+    Next
+    Return SetError(0,0,1)
 EndFunc
