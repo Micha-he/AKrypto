@@ -1,5 +1,5 @@
 #pragma compile(ProductName, "AKrypto")
-#pragma compile(ProductVersion, 0.56.0.3)
+#pragma compile(ProductVersion, 0.56.0.4)
 #pragma compile(LegalCopyright, © Michael Schröder)
 #pragma compile(Icon, .\AKrypto.ico)
 #pragma compile(Out, AKrypto.exe)
@@ -8,7 +8,7 @@
 	****************************************************************************
 	Titel:			AKrypto.au3
 	Autor:			micha_he@autoit.de
-	Datum:			23.11.2020
+	Datum:			07.04.2021
 	
 	Ideen &
 	Hilfen:			spudw2k@autoitscript.com (Tree-/ListView)
@@ -27,6 +27,10 @@
 	AutoIt-Version:	3.3.14.5
 	
 	History
+	V0.56.0.4
+		Variablendeklaration per 3. Assign-Parameter in der Funktion
+		__LanguageIni_Read_Data() realisiert. Dies spart eine gesonderte
+		Deklaration im Header.
 	V0.56.0.3
 		Diverse ungenutze Variablen entfernt
 		Sprachanpassung im Unterverzeichnis '\Language' integriert. INI-
@@ -235,31 +239,7 @@ Global $iNewTreeWidth, $idLVDecryptAll, $idSplashLabel, $idSplashLabelAddInfo
 Global $idLVGetShortInfo, $aStartedFiles[1][3]
 Global $aDesktopData, $bInitSort, $idTreeViewRootItem
 Global $hLanguageMenue, $aLanguage[0][0], $sSelectedLanguageIni
-Global $sLangIniFileName, $aLangIniData, $iFindLngIni
-Global $sListViewHeader, $sPrgShortInfo, $sNewFolder, $sNewFile
-Global $sDecompressTo, $sMarkAll, $sMarkNone, $sRename, $sDelete
-Global $sActionPerformed, $sPrgEnded, $sAttention, $sExtFilesAreOpened
-Global $sError, $sRequest, $sPathLength, $sOverWrite, $sPasswordError
-Global $sUseTarget, $sWriteBack, $sInfo
-Global $sWriteBack, $sContinue, $sInfo, $sInfoText, $sFolderDescription
-Global $sFileSuffix, $sFolderNotCopied, $sFileNotCopied, $sInputNewName
-Global $sInputNewFolder, $sInputNewFile, $sInputPassword, $sInputCheck
-Global $sInputPleasePassword, $sInputPleasePasswordSecond
-Global $sWrongPasswordAgain, $sWithoutPwNotCrypted, $sInputDefaultFolder
-Global  $sInputDefaultFile, $sInputNewFoldername, $sInputNewFilename
-Global $sFolderOverwrite, $sFolderNotOverwrite, $sFolderNotRenamed
-Global $sFileOverwrite, $sFileNotOverwrite, $sFileNotRenamed
-Global $sObjectsDelete, $sObjectsAreDeleted, $sFolderNotDeleted
-Global $sFileNotDeleted, $sFolderEncrypted, $sFolderExists
-Global $sFolderNotCreated, $sFileExists, $sFileEncrypted, $sFileDecrypted
-Global $sFileUpdated, $sActionExecuted, $sFileNotCreated, $sObjectsEncrypted
-Global $sFolderPrefix, $sErrFolderCreatePrefix, $sCryptPathToLong
-Global $sCopyFileErrorGeneral, $sFileExistsOverwrite, $sDestinationNotAvailable
-Global $sFileNotDecrypted, $sSelectFolder, $sObjectsDecrypted
-Global $sDecryptFolderExistsUsed, $sDecryptFolderExistsContinue
-Global $sDecryptFileExistsContinue, $sDecryptSuccessful, $sDecryptWithError
-Global $sDecryptFileExistsOverwrite, $sFileEncryptNew, $sMenueLanguage
-
+Global $aLangIniData, $iFindLngIni
 Global $Version = FileGetVersion(@ScriptFullPath, "ProductVersion")
 If _VersionCompare(@AutoItVersion, "3.3.8.0") = -1 Then Global Const $WM_DROPFILES = 0x233
 
@@ -395,7 +375,7 @@ Func __FileGetIcon($sTargetItem)
 	Local $szRegDefault, $szDefIcon, $sFileExtension, $sLinkTargetName
 	Local $szRegDefault, $aValueSplit, $sExeNameDecrypted, $sFileName, $iRet
 	Local $aReturnIconInfo[2]
-	Local $hTempIcon, $sIconName, $__hSysIL
+	Local $sIconName, $__hSysIL
 	$sFileExtension = StringMid($sTargetItem, StringInStr($sTargetItem, '.', 0, -1))
 	
 	If $sFileExtension = '.lnk' Then
@@ -1909,7 +1889,7 @@ Func __LanguageIni_Read_Data($__sLngIni = "")
 	If Not IsArray($aLangIniData) Then Return SetError(3,0,0)
 	; Eingelesene Sprachdaten den Variablen zuweisen
 	For $i = 1 To $aLangIniData[0][0]
-		Assign($aLangIniData[$i][0], BinaryToString(StringToBinary($aLangIniData[$i][1]), 1), 4)
+		Assign($aLangIniData[$i][0], BinaryToString(StringToBinary($aLangIniData[$i][1]), 1), 2)
 	Next
 	Return SetError(0,0,1)
 EndFunc
