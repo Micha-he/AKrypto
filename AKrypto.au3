@@ -30,7 +30,7 @@
 	V0.56.0.4
 		Variablendeklaration per 3. Assign-Parameter in der Funktion
 		__LanguageIni_Read_Data() realisiert. Dies spart eine gesonderte
-		Deklaration im Header.
+		Deklaration im Header. 
 	V0.56.0.3
 		Diverse ungenutze Variablen entfernt
 		Sprachanpassung im Unterverzeichnis '\Language' integriert. INI-
