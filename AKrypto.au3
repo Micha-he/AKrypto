@@ -1,5 +1,5 @@
 #pragma compile(ProductName, "AKrypto")
-#pragma compile(ProductVersion, 0.56.0.4)
+#pragma compile(ProductVersion, 0.56.0.5)
 #pragma compile(LegalCopyright, © Michael Schröder)
 #pragma compile(Icon, .\AKrypto.ico)
 #pragma compile(Out, AKrypto.exe)
@@ -8,7 +8,7 @@
 	****************************************************************************
 	Titel:			AKrypto.au3
 	Autor:			micha_he@autoit.de
-	Datum:			07.04.2021
+	Datum:			11.03.2022
 	
 	Ideen &
 	Hilfen:			spudw2k@autoitscript.com (Tree-/ListView)
@@ -27,10 +27,13 @@
 	AutoIt-Version:	3.3.14.5
 	
 	History
+	V0.56.0.5
+		Anpassung der Funktion __InitGUIs() an AutoIt V3.3.16.0
+		(Auswählen und Ausklappen des Root-Items).
 	V0.56.0.4
 		Variablendeklaration per 3. Assign-Parameter in der Funktion
 		__LanguageIni_Read_Data() realisiert. Dies spart eine gesonderte
-		Deklaration im Header. 
+		Deklaration im Header.
 	V0.56.0.3
 		Diverse ungenutze Variablen entfernt
 		Sprachanpassung im Unterverzeichnis '\Language' integriert. INI-
@@ -1847,10 +1850,10 @@ Func __InitGUIs($bReInit = False) ; GUI & SplashGUI initialisieren oder neu init
 	; Ordner auswählen und die erste Ebene erweitern(aufklappen)
 	If Not FileExists($sVaultDir) Then DirCreate($sVaultDir)
 	$idTreeViewRootItem = _GUICtrlTreeView_AddChild($idTreeView, "", $sVaultDir, 0, 1)
-	_GUICtrlTreeView_SelectItem($idTreeView, _GUICtrlTreeView_GetItemHandle($idTreeView, 0))
+	_GUICtrlTreeView_SelectItem($idTreeView, $idTreeViewRootItem)
 	__TreeView_FillFolder($idTreeView)
 	__GUICtrlTreeView_Sort($idTreeView)
-	_SendMessage(GUICtrlGetHandle($idTreeView), $TVM_EXPAND, $TVE_EXPAND, $idTreeViewRootItem, 0, "wparam", "handle") ; TreeView nur Root erweitern (öffnen)
+	__GUICtrlTreeView_ExpandOneLevel($idTreeView)
 EndFunc
 
 
@@ -1925,3 +1928,38 @@ Func __GUI_LanguageMenu_Init()
     Next
     Return SetError(0,0,1)
 EndFunc
+
+
+;==================================================================================================
+; Function Name:   _GUICtrlTreeView_ExpandOneLevel($hTreeView [, $hParentItem=0])
+; Description::    Ausklappen nur EINER Ebene eines Items, analog zum Mausklick auf '+'
+; Parameter(s):    $hTreeView     Handle des TreeView
+;                  $hParentItem   Handle des Auszuklappenden Parent-Items
+;                                 Standard 0 ==> Handle des ersten Item im TreeView
+; Return:          Erfolg         nichts
+;                  Fehler         @error 1  -  TreeView enthält kein Item
+;                                 @error 2  -  Item hat keine Child-Item
+; Note:            Die Funktion sollte zwischen _GUICtrlTreeView_BeginUpdate() und _GUICtrlTreeView_EndUpdate()
+;                  ausgeführt werden um ein Flackern zu verhindern
+; Author(s):       BugFix (bugfix@autoit.de)   
+;==================================================================================================
+Func __GUICtrlTreeView_ExpandOneLevel($hTreeView, $hParentItem=0)
+    If $hParentItem < 1 Then
+        Local $hCurrentItem = _GUICtrlTreeView_GetFirstItem($hTreeView)
+    Else
+        Local $hCurrentItem = $hParentItem
+    EndIf
+    If $hCurrentItem = 0 Then Return SetError(1)
+    Local $hChild
+    Local $countChild = _GUICtrlTreeView_GetChildCount($hTreeView, $hCurrentItem)
+    If $countChild = 0 Then Return SetError(2)
+    _GUICtrlTreeView_Expand($hTreeView, $hCurrentItem)
+    For $i = 1 To $countChild
+        If $i = 1 Then 
+            $hChild = _GUICtrlTreeView_GetFirstChild($hTreeView, $hCurrentItem)
+        Else
+            $hChild = _GUICtrlTreeView_GetNextSibling($hTreeView, $hChild)
+        EndIf
+        If _GUICtrlTreeView_GetChildren($hTreeView, $hChild) Then _GUICtrlTreeView_Expand($hTreeView, $hChild, False)
+    Next
+EndFunc  ;==>_GUICtrlTreeView_ExpandOneLevel
